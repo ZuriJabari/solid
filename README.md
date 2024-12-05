@@ -2,21 +2,27 @@
 
 A modern e-commerce platform specializing in CBD products.
 
+## Technology Stack
+- Backend: Python 3.11+, Django 5.0+, Django REST Framework
+- Database: PostgreSQL 15+
+- Frontend: React 18+, React Native with Expo
+- Cache: Redis
+- Task Queue: Celery
+
 ## Project Structure
 
-├── backend/         # Node.js/Express backend
-├── frontend/        # Frontend application
+├── backend/         # Django backend
+├── frontend/        # React web application
+├── mobile/          # React Native mobile app
 └── context/        # Context files
 
 ## Features
 - Product catalog
 - Shopping cart
 - Secure checkout
-
-## Tech Stack
-- Backend: Node.js/Express
-- Database: MongoDB
-- Frontend: (To be decided)
+- Delivery/Pickup system
+- Payment integration
+- Admin dashboard
 
 ## Development
 Please follow the branch strategy:
