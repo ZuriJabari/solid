@@ -1,0 +1,29 @@
+{% extends "rest_framework/base.html" %}
+
+{% block title %}Urban Herb API - Logout{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-6 offset-md-3">
+            <div class="card mt-5">
+                <div class="card-body">
+                    <h3 class="card-title text-center mb-4">Logout</h3>
+                    <p class="text-center">Are you sure you want to logout?</p>
+                    <form method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">Logout</button>
+                            <a href="{% url 'schema-swagger-ui' %}" class="btn btn-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block bootstrap_theme %}
+    <link rel="stylesheet" href="https://bootswatch.com/5/flatly/bootstrap.min.css" type="text/css">
+{% endblock %} 
