@@ -1,0 +1,45 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<div id="content-main">
+    <div class="alert alert-danger">
+        <h2>{% trans "Account Locked" %}</h2>
+        <p>{% trans "Your account has been locked due to too many failed login attempts." %}</p>
+        <p>{% trans "Please try again later or contact the administrator if you believe this is a mistake." %}</p>
+        
+        {% if cooloff_time_remaining %}
+        <p>{% trans "Time remaining until next login attempt:" %} {{ cooloff_time_remaining }}</p>
+        {% endif %}
+        
+        <p>
+            <a href="{% url 'admin:index' %}" class="button">{% trans "Return to home" %}</a>
+        </p>
+    </div>
+</div>
+
+<style>
+    .alert {
+        padding: 20px;
+        margin: 20px 0;
+        border: 1px solid #ebccd1;
+        border-radius: 4px;
+        color: #a94442;
+        background-color: #f2dede;
+    }
+    
+    .button {
+        display: inline-block;
+        padding: 10px 15px;
+        margin-top: 10px;
+        background-color: #417690;
+        color: white;
+        text-decoration: none;
+        border-radius: 4px;
+    }
+    
+    .button:hover {
+        background-color: #205067;
+    }
+</style>
+{% endblock %} 
