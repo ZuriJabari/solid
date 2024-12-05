@@ -1,0 +1,5 @@
+cryptography==41.0.7  # For encryption
+django-axes==6.1.1   # For login attempt tracking
+django-cors-headers==4.3.1  # For CORS security
+django-csp==3.7      # For Content Security Policy
+python-dotenv==1.0.0 # For secure environment variables 
