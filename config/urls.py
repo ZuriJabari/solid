@@ -9,65 +9,57 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from drf_yasg.views import get_schema_view
-from drf_yasg import openapi
 from rest_framework import permissions
 from django.contrib.auth import views as auth_views
 from django.views.generic import RedirectView
 from config.admin import secure_admin_site
-
-schema_view = get_schema_view(
-    openapi.Info(
-        title="Urban Herb API",
-        default_version='v1',
-        description="API documentation for Urban Herb",
-        terms_of_service="https://www.urbanherb.com/terms/",
-        contact=openapi.Contact(email="contact@urbanherb.com"),
-        license=openapi.License(name="BSD License"),
-    ),
-    public=True,
-    permission_classes=(permissions.AllowAny,),
+from drf_spectacular.views import (
+    SpectacularAPIView,
+    SpectacularRedocView,
+    SpectacularSwaggerView,
 )
 
-# Custom logout view that accepts both GET and POST
-class CustomLogoutView(auth_views.LogoutView):
-    http_method_names = ['get', 'post']
+# Authentication URL Patterns
+auth_urlpatterns = [
+    path('login/', auth_views.LoginView.as_view(template_name='rest_framework/login.html'), name='login'),
+    path('logout/', auth_views.LogoutView.as_view(
+        next_page='swagger-ui',
+        template_name='rest_framework/logout.html'
+    ), name='logout'),
+    path('password_change/', auth_views.PasswordChangeView.as_view(), name='password_change'),
+    path('password_change/done/', auth_views.PasswordChangeDoneView.as_view(), name='password_change_done'),
+    path('password_reset/', auth_views.PasswordResetView.as_view(), name='password_reset'),
+    path('password_reset/done/', auth_views.PasswordResetDoneView.as_view(), name='password_reset_done'),
+    path('reset/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+    path('reset/done/', auth_views.PasswordResetCompleteView.as_view(), name='password_reset_complete'),
+    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+]
+
+# API URL Patterns
+api_urlpatterns = [
+    path('products/', include('products.urls')),
+    path('cart/', include('cart.urls')),
+    path('orders/', include('orders.urls')),
+    path('accounts/', include('accounts.urls')),
+    path('mobile-payments/', include('mobile_payments.urls')),
+    path('auth/', include(auth_urlpatterns)),
+]
 
 urlpatterns = [
     # API Documentation
-    path('swagger<format>/', schema_view.without_ui(cache_timeout=0), name='schema-json'),
-    path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
-    path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
-    path('', schema_view.with_ui('redoc', cache_timeout=0), name='api-docs'),
+    path('schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    path('', RedirectView.as_view(url='swagger/', permanent=False), name='index'),
 
     # Admin
     path('admin/', admin.site.urls),
     path('secure-admin/', secure_admin_site.urls),
 
     # Authentication
-    path('auth/login/', auth_views.LoginView.as_view(template_name='rest_framework/login.html'), name='login'),
-    path('auth/logout/', CustomLogoutView.as_view(
-        next_page='schema-swagger-ui',
-        template_name='rest_framework/logout.html'
-    ), name='logout'),
-    path('auth/', include('rest_framework.urls')),
+    path('auth/', include(auth_urlpatterns)),
 
-    # Products
-    path('api/', include('products.urls')),
-
-    # Cart
-    path('api/cart/', include('cart.urls')),
-
-    # Orders
-    path('api/orders/', include('orders.urls')),
-
-    # User Management
-    path('api/accounts/', include('accounts.urls')),
-
-    # Mobile Payments
-    path('api/mobile-payments/', include('mobile_payments.urls')),
-
-    # Authentication
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    # API Endpoints
+    path('api/', include(api_urlpatterns)),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
