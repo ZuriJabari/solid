@@ -1,2 +1,2 @@
 # solid
-solid: for backup and repository protection
+solid: for backup and repository protection #
