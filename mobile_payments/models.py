@@ -1,7 +1,7 @@
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from django.contrib.auth import get_user_model
-from orders.models import CustomerOrder
+from orders.models import Order
 import uuid
 from django.conf import settings
 from django.utils import timezone
@@ -43,7 +43,7 @@ class MobilePayment(models.Model):
         related_name='mobile_payments'
     )
     order = models.ForeignKey(
-        CustomerOrder,
+        Order,
         on_delete=models.PROTECT,
         related_name='mobile_payments'
     )

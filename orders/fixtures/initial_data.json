@@ -1,0 +1,35 @@
+[
+    {
+        "model": "orders.deliveryzone",
+        "pk": 1,
+        "fields": {
+            "name": "Central Kampala",
+            "description": "Delivery within central Kampala area",
+            "delivery_fee": "5000.00",
+            "estimated_days": 1,
+            "is_active": true
+        }
+    },
+    {
+        "model": "orders.deliveryzone",
+        "pk": 2,
+        "fields": {
+            "name": "Greater Kampala",
+            "description": "Delivery to greater Kampala metropolitan area",
+            "delivery_fee": "8000.00",
+            "estimated_days": 2,
+            "is_active": true
+        }
+    },
+    {
+        "model": "orders.deliveryzone",
+        "pk": 3,
+        "fields": {
+            "name": "Upcountry",
+            "description": "Delivery to other major towns",
+            "delivery_fee": "15000.00",
+            "estimated_days": 3,
+            "is_active": true
+        }
+    }
+] 
