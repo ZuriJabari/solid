@@ -4,7 +4,6 @@ A modern e-commerce platform specializing in CBD products.
 
 ## Project Structure
 
-solid/
 ├── backend/         # Node.js/Express backend
 ├── frontend/        # Frontend application
 └── context/        # Context files
@@ -14,4 +13,13 @@ solid/
 - Shopping cart
 - Secure checkout
 
-##
+## Tech Stack
+- Backend: Node.js/Express
+- Database: MongoDB
+- Frontend: (To be decided)
+
+## Development
+Please follow the branch strategy:
+- `main`: Production-ready code
+- `develop`: Development branch
+- `feature/*`: Feature branches
