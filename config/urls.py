@@ -44,6 +44,7 @@ urlpatterns = [
     # Admin and API URLs
     path('admin/', admin.site.urls),
     path('api/', include('products.urls')),
+    path('api/cart/', include('cart.urls')),
     
     # Authentication URLs
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
