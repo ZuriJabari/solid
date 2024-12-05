@@ -24,4 +24,4 @@ Please follow the branch strategy:
 - `develop`: Development branch
 - `feature/*`: Feature branches
 
-#small change 
+#small change.
