@@ -1,9 +1,9 @@
 from django.contrib import admin
 from django.utils.translation import gettext_lazy as _
 from .models import MobilePaymentProvider, MobilePayment, PaymentNotification
+from config.admin import SecureModelAdmin, secure_admin_site
 
-@admin.register(MobilePaymentProvider)
-class MobilePaymentProviderAdmin(admin.ModelAdmin):
+class SecureMobilePaymentProviderAdmin(SecureModelAdmin):
     list_display = ('name', 'code', 'is_active')
     list_filter = ('is_active',)
     search_fields = ('name', 'code')
@@ -18,46 +18,28 @@ class MobilePaymentProviderAdmin(admin.ModelAdmin):
         }),
     )
 
-@admin.register(MobilePayment)
-class MobilePaymentAdmin(admin.ModelAdmin):
-    list_display = (
-        'provider', 'amount', 'currency', 'status',
-        'phone_number', 'created_at', 'completed_at'
-    )
-    list_filter = ('status', 'provider', 'currency')
-    search_fields = (
-        'phone_number', 'provider_tx_id',
-        'provider_tx_ref', 'user__email'
-    )
-    readonly_fields = (
-        'id', 'created_at', 'updated_at',
-        'completed_at', 'provider_tx_id'
-    )
+class SecureMobilePaymentAdmin(SecureModelAdmin):
+    list_display = ('id', 'user', 'amount', 'status', 'provider', 'created_at')
+    list_filter = ('status', 'provider', 'created_at')
+    search_fields = ('id', 'user__email', 'phone_number')
+    readonly_fields = ('created_at', 'updated_at')
     
     fieldsets = (
-        (None, {
-            'fields': ('id', 'user', 'order', 'provider')
+        ('Payment Info', {
+            'fields': ('user', 'amount', 'status', 'provider')
         }),
-        (_('Payment Details'), {
-            'fields': ('amount', 'currency', 'phone_number')
+        ('Contact', {
+            'fields': ('phone_number', 'email')
         }),
-        (_('Transaction Details'), {
-            'fields': (
-                'status', 'provider_tx_id',
-                'provider_tx_ref'
-            )
+        ('Transaction Details', {
+            'fields': ('provider_reference', 'provider_response')
         }),
-        (_('Timestamps'), {
-            'fields': (
-                'created_at', 'updated_at',
-                'completed_at'
-            ),
-            'classes': ('collapse',)
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at')
         }),
     )
 
-@admin.register(PaymentNotification)
-class PaymentNotificationAdmin(admin.ModelAdmin):
+class SecurePaymentNotificationAdmin(SecureModelAdmin):
     list_display = (
         'notification_type', 'payment', 'provider',
         'status', 'is_processed', 'received_at'
@@ -66,7 +48,7 @@ class PaymentNotificationAdmin(admin.ModelAdmin):
         'notification_type', 'status',
         'is_processed', 'provider'
     )
-    search_fields = ('payment__provider_tx_ref', 'payment__phone_number')
+    search_fields = ('payment__id', 'payment__phone_number')
     readonly_fields = (
         'id', 'received_at', 'processed_at',
         'raw_payload'
@@ -89,3 +71,12 @@ class PaymentNotificationAdmin(admin.ModelAdmin):
             )
         }),
     )
+
+# Register with both default admin site and secure admin site
+admin.site.register(MobilePaymentProvider, SecureMobilePaymentProviderAdmin)
+admin.site.register(MobilePayment, SecureMobilePaymentAdmin)
+admin.site.register(PaymentNotification, SecurePaymentNotificationAdmin)
+
+secure_admin_site.register(MobilePaymentProvider, SecureMobilePaymentProviderAdmin)
+secure_admin_site.register(MobilePayment, SecureMobilePaymentAdmin)
+secure_admin_site.register(PaymentNotification, SecurePaymentNotificationAdmin)

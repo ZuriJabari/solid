@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import Order, OrderItem, OrderStatusHistory, OrderNote, DeliveryZone
+from .models import Order, OrderItem, OrderStatusHistory, OrderNote, DeliveryZone, ShippingAddress
+from config.admin import SecureModelAdmin, secure_admin_site
 
 @admin.register(DeliveryZone)
 class DeliveryZoneAdmin(admin.ModelAdmin):
@@ -23,77 +24,37 @@ class OrderNoteInline(admin.TabularInline):
     extra = 0
     readonly_fields = ['created_at', 'created_by']
 
-@admin.register(Order)
-class OrderAdmin(admin.ModelAdmin):
-    list_display = [
-        'order_number', 'user', 'status', 'payment_status',
-        'delivery_method', 'total', 'created_at'
-    ]
-    list_filter = [
-        'status', 'payment_status', 'delivery_method',
-        'created_at', 'delivery_zone'
-    ]
-    search_fields = [
-        'order_number', 'user__email',
-        'user__first_name', 'user__last_name',
-        'delivery_address'
-    ]
-    readonly_fields = [
-        'order_number', 'subtotal', 'total',
-        'created_at', 'updated_at', 'paid_at',
-        'processed_at', 'completed_at', 'cancelled_at'
-    ]
+class SecureOrderAdmin(SecureModelAdmin):
+    list_display = ('id', 'user', 'status', 'total', 'created_at')
+    list_filter = ('status', 'payment_status', 'created_at')
+    search_fields = ('id', 'user__email', 'shipping_address__full_name')
+    readonly_fields = ('created_at', 'updated_at', 'total')
     inlines = [OrderItemInline, OrderStatusHistoryInline, OrderNoteInline]
+    
     fieldsets = (
-        ('Basic Information', {
-            'fields': (
-                'order_number', 'user', 'status',
-                'payment_status'
-            )
+        ('Order Info', {
+            'fields': ('user', 'status', 'payment_status', 'total')
         }),
-        ('Delivery Information', {
-            'fields': (
-                'delivery_method', 'delivery_zone',
-                'delivery_address', 'delivery_instructions',
-                'preferred_delivery_date', 'preferred_delivery_time'
-            )
+        ('Shipping', {
+            'fields': ('shipping_address', 'tracking_number')
         }),
-        ('Pickup Information', {
-            'fields': (
-                'pickup_location', 'pickup_date',
-                'pickup_time'
-            )
-        }),
-        ('Amounts', {
-            'fields': (
-                'subtotal', 'delivery_fee',
-                'tax', 'total'
-            )
-        }),
-        ('Tracking', {
-            'fields': (
-                'tracking_number',
-                'estimated_delivery',
-                'actual_delivery'
-            )
-        }),
-        ('Timestamps', {
-            'fields': (
-                'created_at', 'updated_at',
-                'paid_at', 'processed_at',
-                'completed_at', 'cancelled_at'
-            )
+        ('Dates', {
+            'fields': ('created_at', 'updated_at')
         }),
     )
 
-    def save_formset(self, request, form, formset, change):
-        instances = formset.save(commit=False)
-        for instance in instances:
-            if isinstance(instance, (OrderStatusHistory, OrderNote)):
-                if not instance.created_by:
-                    instance.created_by = request.user
-            instance.save()
-        formset.save_m2m()
+class SecureShippingAddressAdmin(SecureModelAdmin):
+    list_display = ('full_name', 'city', 'country', 'created_at')
+    list_filter = ('country', 'city')
+    search_fields = ('full_name', 'street_address', 'city')
+    readonly_fields = ('created_at', 'updated_at')
+
+# Register with both default admin site and secure admin site
+admin.site.register(Order, SecureOrderAdmin)
+admin.site.register(ShippingAddress, SecureShippingAddressAdmin)
+
+secure_admin_site.register(Order, SecureOrderAdmin)
+secure_admin_site.register(ShippingAddress, SecureShippingAddressAdmin)
 
 @admin.register(OrderNote)
 class OrderNoteAdmin(admin.ModelAdmin):

@@ -14,13 +14,14 @@ from drf_yasg import openapi
 from rest_framework import permissions
 from django.contrib.auth import views as auth_views
 from django.views.generic import RedirectView
+from config.admin import secure_admin_site
 
 schema_view = get_schema_view(
     openapi.Info(
         title="Urban Herb API",
         default_version='v1',
         description="API documentation for Urban Herb",
-        terms_of_service="https://www.google.com/policies/terms/",
+        terms_of_service="https://www.urbanherb.com/terms/",
         contact=openapi.Contact(email="contact@urbanherb.com"),
         license=openapi.License(name="BSD License"),
     ),
@@ -41,6 +42,7 @@ urlpatterns = [
 
     # Admin
     path('admin/', admin.site.urls),
+    path('secure-admin/', secure_admin_site.urls),
 
     # Authentication
     path('auth/login/', auth_views.LoginView.as_view(template_name='rest_framework/login.html'), name='login'),

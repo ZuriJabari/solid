@@ -14,6 +14,26 @@ class DeliveryZone(models.Model):
     def __str__(self):
         return self.name
 
+class ShippingAddress(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    full_name = models.CharField(max_length=255)
+    phone_number = models.CharField(max_length=20)
+    street_address = models.CharField(max_length=255)
+    apartment = models.CharField(max_length=255, blank=True)
+    city = models.CharField(max_length=100)
+    state = models.CharField(max_length=100)
+    postal_code = models.CharField(max_length=20)
+    country = models.CharField(max_length=100)
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.full_name} - {self.city}, {self.country}"
+
+    class Meta:
+        verbose_name_plural = 'Shipping addresses'
+
 class Order(models.Model):
     DELIVERY_CHOICES = [
         ('delivery', 'Home Delivery'),
@@ -83,6 +103,7 @@ class Order(models.Model):
     tracking_number = models.CharField(max_length=100, blank=True)
     estimated_delivery = models.DateTimeField(null=True, blank=True)
     actual_delivery = models.DateTimeField(null=True, blank=True)
+    shipping_address = models.ForeignKey(ShippingAddress, on_delete=models.PROTECT, null=True, blank=True)
 
     class Meta:
         ordering = ['-created_at']
