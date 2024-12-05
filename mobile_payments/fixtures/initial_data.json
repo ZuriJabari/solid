@@ -1,0 +1,28 @@
+[
+    {
+        "model": "mobile_payments.mobilepaymentprovider",
+        "pk": "1",
+        "fields": {
+            "name": "MTN Mobile Money",
+            "code": "MTN",
+            "is_active": true,
+            "api_base_url": "https://sandbox.momodeveloper.mtn.com",
+            "api_key": "test_api_key_mtn",
+            "api_secret": "test_api_secret_mtn",
+            "webhook_secret": "test_webhook_secret_mtn"
+        }
+    },
+    {
+        "model": "mobile_payments.mobilepaymentprovider",
+        "pk": "2",
+        "fields": {
+            "name": "Airtel Money",
+            "code": "AIRTEL",
+            "is_active": true,
+            "api_base_url": "https://openapiuat.airtel.africa",
+            "api_key": "test_api_key_airtel",
+            "api_secret": "test_api_secret_airtel",
+            "webhook_secret": "test_webhook_secret_airtel"
+        }
+    }
+] 
