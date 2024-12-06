@@ -8,7 +8,7 @@
             <div class="metric-label" style="font-size: 14px; color: #4a5568;">Total Orders</div>
         </div>
         <div class="metric-card" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            <div class="metric-value" style="font-size: 24px; font-weight: bold; color: #2c5282;">${{ total_revenue|floatformat:2 }}</div>
+            <div class="metric-value" style="font-size: 24px; font-weight: bold; color: #2c5282;">{{ total_revenue }}</div>
             <div class="metric-label" style="font-size: 14px; color: #4a5568;">Total Revenue</div>
         </div>
         <div class="metric-card" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
@@ -16,7 +16,7 @@
             <div class="metric-label" style="font-size: 14px; color: #4a5568;">Success Rate</div>
         </div>
         <div class="metric-card" style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-            <div class="metric-value" style="font-size: 24px; font-weight: bold; color: #2c5282;">${{ avg_order_value|floatformat:2 }}</div>
+            <div class="metric-value" style="font-size: 24px; font-weight: bold; color: #2c5282;">{{ avg_order_value }}</div>
             <div class="metric-label" style="font-size: 14px; color: #4a5568;">Average Order Value</div>
         </div>
     </div>

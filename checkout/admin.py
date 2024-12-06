@@ -12,7 +12,10 @@ from datetime import datetime, timedelta
 from rangefilter.filters import DateRangeFilter
 import json
 import csv
-from .models import Order, DeliveryZone, PickupLocation, PaymentMethod
+from .models import Order, DeliveryZone, PickupLocation, PaymentMethod, CheckoutSession
+from django.utils.translation import gettext_lazy as _
+from config.admin import SecureModelAdmin, secure_admin_site
+from config.currency import format_currency
 
 def export_orders_csv(modeladmin, request, queryset):
     response = HttpResponse(content_type='text/csv')
@@ -250,92 +253,115 @@ class OrderAdmin(admin.ModelAdmin):
         
         return TemplateResponse(request, 'admin/checkout/charts.html', context)
 
-@admin.register(DeliveryZone)
-class DeliveryZoneAdmin(admin.ModelAdmin):
-    list_display = ['name', 'delivery_fee', 'is_active', 'total_orders', 'total_revenue']
-    list_filter = ['is_active', 'created_at']
-    search_fields = ['name']
-    actions = ['export_delivery_zones_csv']
+class DeliveryZoneAdmin(SecureModelAdmin):
+    list_display = ['name', 'formatted_delivery_fee', 'estimated_days', 'is_active']
+    list_filter = ['is_active']
+    search_fields = ['name', 'description']
 
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        qs = qs.annotate(
-            total_orders=Count('orders'),
-            total_revenue=Sum('orders__total_amount')
-        )
-        return qs
+    def formatted_delivery_fee(self, obj):
+        return format_currency(obj.delivery_fee)
+    formatted_delivery_fee.short_description = _('Delivery Fee')
 
-    def total_orders(self, obj):
-        return obj.total_orders or 0
-    total_orders.admin_order_field = 'total_orders'
-    total_orders.short_description = 'Total Orders'
-
-    def total_revenue(self, obj):
-        value = obj.total_revenue or 0
-        return mark_safe(f'${value:.2f}')
-    total_revenue.admin_order_field = 'total_revenue'
-    total_revenue.short_description = 'Total Revenue'
-
-@admin.register(PickupLocation)
-class PickupLocationAdmin(admin.ModelAdmin):
-    list_display = ['name', 'address', 'is_active', 'total_pickups', 'avg_wait_time']
-    list_filter = ['is_active', 'created_at']
+class PickupLocationAdmin(SecureModelAdmin):
+    list_display = ['name', 'address', 'contact_phone', 'is_active']
+    list_filter = ['is_active']
     search_fields = ['name', 'address']
-    actions = ['export_pickup_locations_csv']
 
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        qs = qs.annotate(
-            pickup_count=Count('orders', filter=Q(orders__delivery_method='pickup')),
-            avg_wait=Avg(
-                ExpressionWrapper(
-                    F('orders__updated_at') - F('orders__created_at'),
-                    output_field=FloatField()
-                ),
-                filter=Q(orders__status='completed', orders__delivery_method='pickup')
-            )
-        )
-        return qs
-
-    def total_pickups(self, obj):
-        return obj.pickup_count or 0
-    total_pickups.admin_order_field = 'pickup_count'
-    total_pickups.short_description = 'Total Pickups'
-
-    def avg_wait_time(self, obj):
-        if obj.avg_wait:
-            minutes = obj.avg_wait / 60
-            return f"{minutes:.1f} minutes"
-        return "N/A"
-    avg_wait_time.admin_order_field = 'avg_wait'
-    avg_wait_time.short_description = 'Average Wait Time'
-
-@admin.register(PaymentMethod)
-class PaymentMethodAdmin(admin.ModelAdmin):
-    list_display = ['name', 'is_active', 'total_transactions', 'total_value']
-    list_filter = ['is_active', 'created_at']
+class PaymentMethodAdmin(SecureModelAdmin):
+    list_display = ['name', 'provider', 'formatted_min_amount', 'formatted_max_amount', 'is_active']
+    list_filter = ['provider', 'is_active']
     search_fields = ['name']
-    actions = ['export_payment_methods_csv']
+
+    def formatted_min_amount(self, obj):
+        return format_currency(obj.min_amount)
+    formatted_min_amount.short_description = _('Minimum Amount')
+
+    def formatted_max_amount(self, obj):
+        return format_currency(obj.max_amount)
+    formatted_max_amount.short_description = _('Maximum Amount')
+
+class CheckoutSessionAdmin(SecureModelAdmin):
+    list_display = ['id', 'user', 'status', 'formatted_total', 'created_at']
+    list_filter = ['status', 'delivery_type', 'created_at']
+    search_fields = ['user__email', 'delivery_address']
+    readonly_fields = [
+        'formatted_subtotal', 'formatted_delivery_fee', 'formatted_total',
+        'created_at', 'expires_at'
+    ]
+
+    fieldsets = (
+        ('User Info', {
+            'fields': ('user', 'status', 'delivery_type')
+        }),
+        ('Amounts', {
+            'fields': ('formatted_subtotal', 'formatted_delivery_fee', 'formatted_total')
+        }),
+        ('Delivery Details', {
+            'fields': ('delivery_zone', 'pickup_location', 'delivery_address', 'delivery_instructions')
+        }),
+        ('Payment', {
+            'fields': ('payment_method',)
+        }),
+        ('Dates', {
+            'fields': ('created_at', 'expires_at')
+        }),
+    )
+
+    def formatted_subtotal(self, obj):
+        return format_currency(obj.subtotal)
+    formatted_subtotal.short_description = _('Subtotal')
+
+    def formatted_delivery_fee(self, obj):
+        return format_currency(obj.delivery_fee)
+    formatted_delivery_fee.short_description = _('Delivery Fee')
+
+    def formatted_total(self, obj):
+        return format_currency(obj.total)
+    formatted_total.short_description = _('Total')
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        completed_filter = Q(orders__status='completed')
-        total_filter = Q()
+        if request.user.is_superuser:
+            return qs
+        return qs.filter(user=request.user)
+
+    def changelist_view(self, request, extra_context=None):
+        # Get base queryset
+        qs = self.get_queryset(request)
         
-        qs = qs.annotate(
-            transaction_count=Count('orders', filter=total_filter),
-            transaction_value=Sum('orders__total_amount', filter=completed_filter),
-            completed_count=Count('orders', filter=completed_filter)
-        )
-        return qs
+        # Calculate statistics
+        total_sessions = qs.count()
+        completed_sessions = qs.filter(status='COMPLETED').count()
+        success_rate = (completed_sessions / total_sessions * 100) if total_sessions > 0 else 0
+        
+        # Calculate revenue metrics
+        total_revenue = qs.filter(status='COMPLETED').aggregate(
+            total=Sum('total'))['total'] or 0
+        avg_order_value = qs.filter(status='COMPLETED').aggregate(
+            avg=Avg('total'))['avg'] or 0
 
-    def total_transactions(self, obj):
-        return obj.transaction_count or 0
-    total_transactions.admin_order_field = 'transaction_count'
-    total_transactions.short_description = 'Total Transactions'
+        # Format currency values
+        formatted_total_revenue = format_currency(total_revenue)
+        formatted_avg_order_value = format_currency(avg_order_value)
 
-    def total_value(self, obj):
-        value = obj.transaction_value or 0
-        return mark_safe(f'${value:.2f}')
-    total_value.admin_order_field = 'transaction_value'
-    total_value.short_description = 'Total Value'
+        extra_context = extra_context or {}
+        extra_context.update({
+            'total_sessions': total_sessions,
+            'completed_sessions': completed_sessions,
+            'success_rate': round(success_rate, 1),
+            'total_revenue': formatted_total_revenue,
+            'avg_order_value': formatted_avg_order_value,
+        })
+        
+        return super().changelist_view(request, extra_context=extra_context)
+
+# Register with both admin sites
+admin.site.register(DeliveryZone, DeliveryZoneAdmin)
+admin.site.register(PickupLocation, PickupLocationAdmin)
+admin.site.register(PaymentMethod, PaymentMethodAdmin)
+admin.site.register(CheckoutSession, CheckoutSessionAdmin)
+
+secure_admin_site.register(DeliveryZone, DeliveryZoneAdmin)
+secure_admin_site.register(PickupLocation, PickupLocationAdmin)
+secure_admin_site.register(PaymentMethod, PaymentMethodAdmin)
+secure_admin_site.register(CheckoutSession, CheckoutSessionAdmin)
