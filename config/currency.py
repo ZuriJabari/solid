@@ -5,8 +5,8 @@ from decimal import Decimal
 
 # Currency settings
 CURRENCY = 'UGX'
-CURRENCY_SYMBOL = 'USh'
-CURRENCY_DECIMAL_PLACES = 0  # UGX doesn't use decimal places
+CURRENCY_SYMBOL = 'UGX'
+CURRENCY_DECIMAL_PLACES = 2
 CURRENCY_THOUSAND_SEPARATOR = ','
 CURRENCY_USE_GROUPING = True
 
@@ -18,12 +18,9 @@ MAX_AMOUNT = Decimal('100000000')  # 100M UGX maximum
 def format_currency(amount):
     """Format amount in UGX currency format"""
     if amount is None:
-        return f"{CURRENCY_SYMBOL} 0"
+        return f"{CURRENCY_SYMBOL} 0.00"
     
-    # Round to whole numbers since UGX doesn't use decimals
-    amount = round(Decimal(str(amount)))
-    
-    # Format with thousand separator
-    formatted = "{:,.0f}".format(amount)
+    # Format with decimals and thousand separator
+    formatted = "{:,.2f}".format(Decimal(str(amount)))
     
     return f"{CURRENCY_SYMBOL} {formatted}" 

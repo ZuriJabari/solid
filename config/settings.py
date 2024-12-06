@@ -28,11 +28,13 @@ INSTALLED_APPS = [
     
     # Third-party apps
     'rest_framework',
-    'drf_spectacular',
+    'rest_framework.authtoken',
     'corsheaders',
-    'axes',
-    'mptt',
     'debug_toolbar',
+    'django_filters',
+    'mptt',
+    'axes',
+    'drf_spectacular',
     'rangefilter',
     
     # Local apps
@@ -42,6 +44,7 @@ INSTALLED_APPS = [
     'orders.apps.OrdersConfig',
     'mobile_payments.apps.MobilePaymentsConfig',
     'checkout.apps.CheckoutConfig',
+    'analytics.apps.AnalyticsConfig',
 ]
 
 MIDDLEWARE = [
@@ -109,9 +112,15 @@ USE_I18N = True
 USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
+
+# Media files
 MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -225,17 +234,6 @@ AUTHENTICATION_BACKENDS = [
 CORS_ALLOW_ALL_ORIGINS = True  # Change in production
 CORS_ALLOW_CREDENTIALS = True
 
-# Media files
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
-
-# Static files
-STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_DIRS = [
-    BASE_DIR / 'static',
-]
-
 # Debug toolbar settings
 INTERNAL_IPS = [
     '127.0.0.1',
@@ -243,7 +241,6 @@ INTERNAL_IPS = [
 
 DEBUG_TOOLBAR_CONFIG = {
     'SHOW_TOOLBAR_CALLBACK': lambda request: True,
-    'IS_RUNNING_TESTS': True,
 }
 
 # DRF Spectacular settings
@@ -253,3 +250,16 @@ SPECTACULAR_SETTINGS = {
     'VERSION': '1.0.0',
     'SCHEMA_PATH_PREFIX': '/api',
 }
+
+# Currency settings
+from .currency import (
+    CURRENCY, CURRENCY_SYMBOL, CURRENCY_DECIMAL_PLACES,
+    CURRENCY_THOUSAND_SEPARATOR, CURRENCY_USE_GROUPING,
+    MIN_AMOUNT, MAX_AMOUNT, format_currency
+)
+
+# Update number formatting settings
+USE_THOUSAND_SEPARATOR = True
+THOUSAND_SEPARATOR = CURRENCY_THOUSAND_SEPARATOR
+NUMBER_GROUPING = 3
+DECIMAL_SEPARATOR = '.'

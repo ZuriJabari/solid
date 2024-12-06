@@ -6,14 +6,25 @@ class SecurityHeadersMiddleware(MiddlewareMixin):
     """
     def process_response(self, request, response):
         # Content Security Policy
-        response['Content-Security-Policy'] = (
-            "default-src 'self'; "
-            "img-src 'self' data: https:; "
-            "style-src 'self' 'unsafe-inline' https:; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
-            "connect-src 'self' https:; "
-            "frame-ancestors 'none';"
-        )
+        if '/swagger/' in request.path or '/redoc/' in request.path:
+            # More permissive CSP for Swagger UI
+            response['Content-Security-Policy'] = (
+                "default-src * 'unsafe-inline' 'unsafe-eval'; "
+                "img-src * data: blob: 'unsafe-inline'; "
+                "connect-src * 'unsafe-inline'; "
+                "style-src * 'unsafe-inline'; "
+                "script-src * 'unsafe-inline' 'unsafe-eval';"
+            )
+        else:
+            # Strict CSP for other routes
+            response['Content-Security-Policy'] = (
+                "default-src 'self'; "
+                "img-src 'self' data: https:; "
+                "style-src 'self' 'unsafe-inline' https:; "
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; "
+                "connect-src 'self' https:; "
+                "frame-ancestors 'none';"
+            )
         
         # Prevent clickjacking
         response['X-Frame-Options'] = 'DENY'

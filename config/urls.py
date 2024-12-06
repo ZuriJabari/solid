@@ -19,6 +19,7 @@ urlpatterns = [
     path('api/orders/', include('orders.urls', namespace='orders')),
     path('api/payments/', include('mobile_payments.urls', namespace='mobile_payments')),
     path('api/checkout/', include('checkout.urls', namespace='checkout')),
+    path('api/analytics/', include('analytics.urls', namespace='analytics')),
     
     # API Documentation
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
