@@ -106,6 +106,12 @@ class UserPreference(models.Model):
         ('SYSTEM', 'System'),
     ]
 
+    NOTIFICATION_CHOICES = [
+        ('all', 'All Notifications'),
+        ('important', 'Important Only'),
+        ('none', 'None')
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='preferences', to_field='id')
     
@@ -113,8 +119,18 @@ class UserPreference(models.Model):
     theme = models.CharField(_('theme preference'), max_length=20, choices=THEME_CHOICES, default='SYSTEM')
     
     # Notification preferences
-    email_notifications = models.JSONField(_('email notification settings'), default=dict)
-    push_notifications = models.JSONField(_('push notification settings'), default=dict)
+    email_notifications = models.CharField(
+        _('email notifications'),
+        max_length=10,
+        choices=NOTIFICATION_CHOICES,
+        default='all'
+    )
+    push_notifications = models.CharField(
+        _('push notifications'),
+        max_length=10,
+        choices=NOTIFICATION_CHOICES,
+        default='all'
+    )
     
     # Shopping preferences
     default_shipping_address = models.ForeignKey(
@@ -130,6 +146,23 @@ class UserPreference(models.Model):
         blank=True,
         on_delete=models.SET_NULL,
         related_name='billing_preference'
+    )
+    
+    # Product preferences
+    wishlist_items = models.ManyToManyField(
+        'products.Product',
+        related_name='in_wishlists',
+        blank=True
+    )
+    saved_items = models.ManyToManyField(
+        'products.Product',
+        related_name='saved_by_users',
+        blank=True
+    )
+    preferred_categories = models.ManyToManyField(
+        'products.Category',
+        related_name='preferred_by_users',
+        blank=True
     )
     
     created_at = models.DateTimeField(auto_now_add=True)

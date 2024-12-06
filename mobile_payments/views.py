@@ -1,147 +1,137 @@
+from django.shortcuts import render
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
-from .models import MobilePaymentProvider, MobilePayment, PaymentNotification
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
+from .models import MobilePayment
 from .serializers import (
-    MobilePaymentProviderSerializer, MobilePaymentSerializer,
-    PaymentNotificationSerializer, InitiatePaymentSerializer,
-    CheckPaymentStatusSerializer
+    MobilePaymentSerializer, PaymentInitiateSerializer,
+    PaymentStatusSerializer, WebhookSerializer,
+    AirtelWebhookSerializer, MTNWebhookSerializer
 )
-from .providers import get_provider, PaymentError
+from core.serializers import ErrorSerializer, SuccessSerializer
 from orders.models import Order
 
-class MobilePaymentProviderViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = MobilePaymentProvider.objects.filter(is_active=True)
-    serializer_class = MobilePaymentProviderSerializer
+@extend_schema_view(
+    list=extend_schema(
+        description='List all mobile payments for the current user',
+        responses={200: MobilePaymentSerializer(many=True)}
+    ),
+    retrieve=extend_schema(
+        description='Get a specific mobile payment by ID',
+        responses={200: MobilePaymentSerializer}
+    ),
+)
+class MobilePaymentViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    API endpoints for managing mobile payments.
+    """
     permission_classes = [IsAuthenticated]
-
-class MobilePaymentViewSet(viewsets.ModelViewSet):
     serializer_class = MobilePaymentSerializer
-    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return MobilePayment.objects.filter(
-            user=self.request.user
-        ).select_related('provider')
+        if getattr(self, 'swagger_fake_view', False):
+            return MobilePayment.objects.none()
+        return MobilePayment.objects.filter(order__user=self.request.user)
 
+    @extend_schema(
+        description='Initiate a mobile payment',
+        request=PaymentInitiateSerializer,
+        responses={
+            200: MobilePaymentSerializer,
+            400: ErrorSerializer,
+            404: ErrorSerializer,
+        }
+    )
     @action(detail=False, methods=['post'])
     def initiate(self, request):
-        serializer = InitiatePaymentSerializer(data=request.data)
+        serializer = PaymentInitiateSerializer(data=request.data)
         if serializer.is_valid():
             try:
                 order = Order.objects.get(
                     id=serializer.validated_data['order_id'],
                     user=request.user
                 )
-                
-                provider = get_provider(
-                    serializer.validated_data['provider_code']
-                )
-                
-                # Create payment record
                 payment = MobilePayment.objects.create(
-                    user=request.user,
                     order=order,
-                    provider=provider.provider,
-                    amount=order.total,
-                    currency='UGX',
-                    phone_number=serializer.validated_data['phone_number']
+                    user=request.user,
+                    provider=serializer.validated_data['provider'],
+                    phone_number=serializer.validated_data['phone_number'],
+                    amount=order.total
                 )
-                
-                # Initiate payment with provider
-                result = provider.initiate_payment(payment)
-                
-                return Response(
-                    MobilePaymentSerializer(payment).data,
-                    status=status.HTTP_201_CREATED
-                )
-                
+                return Response(MobilePaymentSerializer(payment).data)
             except Order.DoesNotExist:
                 return Response(
                     {'error': 'Order not found'},
                     status=status.HTTP_404_NOT_FOUND
                 )
-            except PaymentError as e:
-                return Response(
-                    {'error': str(e)},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        return Response(
-            serializer.errors,
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False)
+    @extend_schema(
+        description='Check payment status',
+        request=PaymentStatusSerializer,
+        responses={
+            200: MobilePaymentSerializer,
+            400: ErrorSerializer,
+            404: ErrorSerializer,
+        }
+    )
+    @action(detail=False, methods=['post'])
     def check_status(self, request):
-        serializer = CheckPaymentStatusSerializer(data=request.data)
+        serializer = PaymentStatusSerializer(data=request.data)
         if serializer.is_valid():
             try:
                 payment = MobilePayment.objects.get(
-                    provider_tx_ref=serializer.validated_data['provider_tx_ref'],
-                    user=request.user
+                    transaction_id=serializer.validated_data['transaction_id'],
+                    order__user=request.user
                 )
-                
-                provider = get_provider(payment.provider.code)
-                result = provider.check_payment_status(payment)
-                
-                return Response(
-                    MobilePaymentSerializer(payment).data
-                )
-                
+                return Response(MobilePaymentSerializer(payment).data)
             except MobilePayment.DoesNotExist:
                 return Response(
                     {'error': 'Payment not found'},
                     status=status.HTTP_404_NOT_FOUND
                 )
-            except PaymentError as e:
-                return Response(
-                    {'error': str(e)},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        return Response(
-            serializer.errors,
-            status=status.HTTP_400_BAD_REQUEST
-        )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class PaymentWebhookView(viewsets.ViewSet):
-    permission_classes = []  # Public endpoint
-    
-    def _handle_webhook(self, request, provider_code):
-        try:
-            provider = get_provider(provider_code)
-            signature = request.headers.get('X-Webhook-Signature')
-            
-            if not provider.validate_notification(request.data, signature):
-                return Response(
-                    {'error': 'Invalid signature'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Create notification record
-            notification = PaymentNotification.objects.create(
-                provider=provider.provider,
-                notification_type=request.data.get('type'),
-                status=request.data.get('status'),
-                raw_payload=request.data
-            )
-            
-            # Process notification
-            provider.process_notification(notification)
-            
-            return Response({'status': 'success'})
-            
-        except PaymentError as e:
+class PaymentWebhookView(APIView):
+    """
+    API endpoint for payment provider webhooks.
+    """
+    permission_classes = []
+
+    @extend_schema(
+        description='Airtel Money webhook endpoint',
+        request=AirtelWebhookSerializer,
+        responses={
+            200: SuccessSerializer,
+            400: ErrorSerializer,
+        }
+    )
+    def post(self, request, provider):
+        if provider == 'airtel':
+            serializer = AirtelWebhookSerializer(data=request.data)
+        elif provider == 'mtn':
+            serializer = MTNWebhookSerializer(data=request.data)
+        else:
             return Response(
-                {'error': str(e)},
+                {'error': 'Invalid payment provider'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-    
-    @action(detail=False, methods=['post'])
-    def mtn(self, request):
-        return self._handle_webhook(request, 'MTN')
-    
-    @action(detail=False, methods=['post'])
-    def airtel(self, request):
-        return self._handle_webhook(request, 'AIRTEL')
+
+        if serializer.is_valid():
+            try:
+                payment = MobilePayment.objects.get(
+                    transaction_id=serializer.validated_data['transaction_id']
+                )
+                payment.status = serializer.validated_data['status']
+                payment.save()
+                return Response({'success': True})
+            except MobilePayment.DoesNotExist:
+                return Response(
+                    {'error': 'Payment not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

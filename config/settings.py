@@ -28,12 +28,12 @@ INSTALLED_APPS = [
     
     # Third-party apps
     'rest_framework',
-    'corsheaders',
-    'django_filters',
     'drf_spectacular',
-    'drf_spectacular_sidecar',
-    'mptt',
+    'corsheaders',
     'axes',
+    'mptt',
+    'debug_toolbar',
+    'rangefilter',
     
     # Local apps
     'accounts.apps.AccountsConfig',
@@ -41,17 +41,20 @@ INSTALLED_APPS = [
     'cart.apps.CartConfig',
     'orders.apps.OrdersConfig',
     'mobile_payments.apps.MobilePaymentsConfig',
+    'checkout.apps.CheckoutConfig',
 ]
 
 MIDDLEWARE = [
+    'debug_toolbar.middleware.DebugToolbarMiddleware',
     'django.middleware.security.SecurityMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'config.middleware.SecurityHeadersMiddleware',
     'axes.middleware.AxesMiddleware',
 ]
 
@@ -122,21 +125,21 @@ SITE_URL = 'http://127.0.0.1:8002'
 # REST Framework settings
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
-    'DEFAULT_AUTHENTICATION_CLASSES': (
+    'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.BasicAuthentication',
-    ),
+    ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 10,
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10,
 }
 
 # JWT settings
@@ -155,20 +158,18 @@ LOGOUT_REDIRECT_URL = '/admin/login/'
 
 # Swagger settings
 SWAGGER_SETTINGS = {
+    'USE_SESSION_AUTH': False,
     'SECURITY_DEFINITIONS': {
         'Bearer': {
             'type': 'apiKey',
             'name': 'Authorization',
             'in': 'header'
         }
-    },
-    'USE_SESSION_AUTH': True,
-    'JSON_EDITOR': True,
-    'OPERATIONS_SORTER': 'alpha',
-    'TAGS_SORTER': 'alpha',
-    'DOC_EXPANSION': 'none',
-    'DEFAULT_MODEL_RENDERING': 'model',
-    'DEFAULT_MODEL_DEPTH': 3,
+    }
+}
+
+REDOC_SETTINGS = {
+    'LAZY_RENDERING': False,
 }
 
 # Admin security settings
@@ -209,13 +210,14 @@ SECURE_HSTS_PRELOAD = True
 # Django Axes settings
 AXES_ENABLED = True
 AXES_FAILURE_LIMIT = 5
-AXES_LOCK_OUT_AT_FAILURE = True
 AXES_COOLOFF_TIME = 1
+AXES_LOCKOUT_TEMPLATE = 'admin/login_lockout.html'
 AXES_RESET_ON_SUCCESS = True
+AXES_LOCKOUT_PARAMETERS = ['username', 'ip_address', 'user_agent']
 
-# Add Axes backend
+# Authentication Backends
 AUTHENTICATION_BACKENDS = [
-    'axes.backends.AxesStandaloneBackend',
+    'axes.backends.AxesBackend',
     'django.contrib.auth.backends.ModelBackend',
 ]
 
@@ -234,72 +236,20 @@ STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
 
-# Spectacular settings for API documentation
+# Debug toolbar settings
+INTERNAL_IPS = [
+    '127.0.0.1',
+]
+
+DEBUG_TOOLBAR_CONFIG = {
+    'SHOW_TOOLBAR_CALLBACK': lambda request: True,
+    'IS_RUNNING_TESTS': True,
+}
+
+# DRF Spectacular settings
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Urban Herb API',
-    'DESCRIPTION': 'API documentation for Urban Herb E-commerce Platform',
+    'DESCRIPTION': 'API for Urban Herb e-commerce platform',
     'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': True,
-    'SERVE_PUBLIC': True,
-    'SWAGGER_UI_DIST': 'SIDECAR',
-    'SWAGGER_UI_FAVICON_HREF': 'SIDECAR',
-    'REDOC_DIST': 'SIDECAR',
-    'SCHEMA_PATH_PREFIX': '/api/',
-    'SCHEMA_COERCE_PATH_PK_SUFFIX': True,
-    'COMPONENT_SPLIT_REQUEST': True,
-    'COMPONENT_NO_READ_ONLY_REQUIRED': True,
-    'SWAGGER_UI_SETTINGS': {
-        'deepLinking': True,
-        'persistAuthorization': True,
-        'displayOperationId': True,
-        'displayRequestDuration': True,
-        'filter': True,
-        'docExpansion': 'list',
-        'defaultModelExpandDepth': 3,
-        'defaultModelsExpandDepth': 3,
-        'defaultModelRendering': 'model',
-    },
-    'SECURITY': [{'Bearer': []}],
-    'SERVERS': [
-        {'url': 'http://127.0.0.1:8002', 'description': 'Local Development Server'}
-    ],
-    'TAGS': [
-        {'name': 'products', 'description': 'Product management endpoints'},
-        {'name': 'cart', 'description': 'Shopping cart operations'},
-        {'name': 'orders', 'description': 'Order management'},
-        {'name': 'accounts', 'description': 'User account management'},
-        {'name': 'mobile-payments', 'description': 'Mobile payment processing'},
-        {'name': 'auth', 'description': 'Authentication endpoints'},
-    ],
-    'APPEND_COMPONENTS': {
-        'securitySchemes': {
-            'Bearer': {
-                'type': 'http',
-                'scheme': 'bearer',
-                'bearerFormat': 'JWT',
-            },
-            'Session': {
-                'type': 'apiKey',
-                'in': 'cookie',
-                'name': 'sessionid',
-            }
-        }
-    },
-    'OPERATIONS': {
-        'auth_login': {
-            'description': 'Log in to the application',
-            'tags': ['auth'],
-            'responses': {
-                200: {'description': 'Successfully logged in'},
-                400: {'description': 'Invalid credentials'},
-            }
-        },
-        'auth_logout': {
-            'description': 'Log out from the application',
-            'tags': ['auth'],
-            'responses': {
-                200: {'description': 'Successfully logged out'},
-            }
-        },
-    }
+    'SCHEMA_PATH_PREFIX': '/api',
 }

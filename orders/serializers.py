@@ -1,5 +1,7 @@
 from rest_framework import serializers
-from .models import Order, OrderItem, OrderStatusHistory, OrderNote, DeliveryZone
+from typing import List, Dict, Any
+from drf_spectacular.utils import extend_schema_field
+from .models import Order, OrderItem, OrderStatusHistory, OrderNote, DeliveryZone, Product
 
 class DeliveryZoneSerializer(serializers.ModelSerializer):
     class Meta:
@@ -7,25 +9,13 @@ class DeliveryZoneSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'description', 'delivery_fee', 'estimated_days']
 
 class OrderItemSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source='product.name', read_only=True)
-    product_image = serializers.SerializerMethodField()
+    product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+    subtotal = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
 
     class Meta:
         model = OrderItem
-        fields = [
-            'id', 'product', 'product_name', 'product_image',
-            'quantity', 'unit_price', 'subtotal'
-        ]
-        read_only_fields = ['subtotal']
-
-    def get_product_image(self, obj):
-        request = self.context.get('request')
-        if obj.product.images.filter(is_primary=True).exists():
-            image = obj.product.images.filter(is_primary=True).first()
-            if request:
-                return request.build_absolute_uri(image.image.url)
-            return image.image.url
-        return None
+        fields = ['product', 'quantity', 'price', 'subtotal']
+        read_only_fields = ['price', 'subtotal']
 
 class OrderStatusHistorySerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
@@ -46,14 +36,12 @@ class OrderNoteSerializer(serializers.ModelSerializer):
 class OrderListSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     payment_status_display = serializers.CharField(source='get_payment_status_display', read_only=True)
-    delivery_method_display = serializers.CharField(source='get_delivery_method_display', read_only=True)
 
     class Meta:
         model = Order
         fields = [
-            'id', 'order_number', 'status', 'status_display',
+            'id', 'status', 'status_display',
             'payment_status', 'payment_status_display',
-            'delivery_method', 'delivery_method_display',
             'total', 'created_at'
         ]
         read_only_fields = fields
@@ -64,33 +52,26 @@ class OrderDetailSerializer(serializers.ModelSerializer):
     notes = serializers.SerializerMethodField()
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     payment_status_display = serializers.CharField(source='get_payment_status_display', read_only=True)
-    delivery_method_display = serializers.CharField(source='get_delivery_method_display', read_only=True)
     delivery_zone = DeliveryZoneSerializer(read_only=True)
 
     class Meta:
         model = Order
         fields = [
-            'id', 'order_number', 'user',
-            'status', 'status_display',
+            'id', 'user', 'status', 'status_display',
             'payment_status', 'payment_status_display',
-            'delivery_method', 'delivery_method_display',
-            'delivery_zone', 'delivery_address', 'delivery_instructions',
-            'preferred_delivery_date', 'preferred_delivery_time',
-            'pickup_location', 'pickup_date', 'pickup_time',
-            'subtotal', 'delivery_fee', 'tax', 'total',
-            'created_at', 'updated_at', 'paid_at',
-            'processed_at', 'completed_at', 'cancelled_at',
-            'tracking_number', 'estimated_delivery', 'actual_delivery',
+            'delivery_zone', 'shipping_address',
+            'subtotal', 'delivery_fee', 'total',
+            'created_at', 'updated_at',
+            'tracking_number',
             'items', 'status_history', 'notes'
         ]
         read_only_fields = [
-            'order_number', 'user', 'subtotal', 'total',
-            'created_at', 'updated_at', 'paid_at',
-            'processed_at', 'completed_at', 'cancelled_at',
-            'actual_delivery'
+            'user', 'subtotal', 'total',
+            'created_at', 'updated_at'
         ]
 
-    def get_notes(self, obj):
+    @extend_schema_field(OrderNoteSerializer(many=True))
+    def get_notes(self, obj: Order) -> List[Dict[str, Any]]:
         # Only return public notes and all notes for staff users
         request = self.context.get('request')
         if request and request.user.is_staff:
@@ -105,42 +86,10 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = [
-            'delivery_method', 'delivery_zone', 'delivery_address',
-            'delivery_instructions', 'preferred_delivery_date',
-            'preferred_delivery_time', 'pickup_location',
-            'pickup_date', 'pickup_time', 'items'
+            'delivery_zone', 'shipping_address', 'items'
         ]
 
-    def validate(self, data):
-        # Validate delivery method specific fields
-        if data['delivery_method'] == 'delivery':
-            if not data.get('delivery_address'):
-                raise serializers.ValidationError(
-                    {"delivery_address": "Delivery address is required for delivery orders."}
-                )
-            if not data.get('delivery_zone'):
-                raise serializers.ValidationError(
-                    {"delivery_zone": "Delivery zone is required for delivery orders."}
-                )
-        else:  # pickup
-            if not data.get('pickup_location'):
-                raise serializers.ValidationError(
-                    {"pickup_location": "Pickup location is required for pickup orders."}
-                )
-            if not data.get('pickup_date'):
-                raise serializers.ValidationError(
-                    {"pickup_date": "Pickup date is required for pickup orders."}
-                )
-
-        # Validate items
-        if not data.get('items'):
-            raise serializers.ValidationError(
-                {"items": "At least one item is required."}
-            )
-
-        return data
-
-    def create(self, validated_data):
+    def create(self, validated_data: Dict[str, Any]) -> Order:
         items_data = validated_data.pop('items')
         order = Order.objects.create(
             user=self.context['request'].user,
@@ -153,10 +102,9 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
         # Calculate totals
         order.subtotal = sum(item.subtotal for item in order.items.all())
-        if order.delivery_method == 'delivery' and order.delivery_zone:
+        if order.delivery_zone:
             order.delivery_fee = order.delivery_zone.delivery_fee
-        order.tax = order.subtotal * 0.15  # 15% tax
-        order.total = order.subtotal + order.delivery_fee + order.tax
+        order.total = order.subtotal + order.delivery_fee
         order.save()
 
         # Create initial status history
@@ -167,4 +115,23 @@ class OrderCreateSerializer(serializers.ModelSerializer):
             created_by=self.context['request'].user
         )
 
-        return order 
+        return order
+
+# Action Serializers
+class AddNoteSerializer(serializers.Serializer):
+    """Serializer for adding a note to an order"""
+    note = serializers.CharField()
+    is_public = serializers.BooleanField(default=True)
+
+class UpdateStatusSerializer(serializers.Serializer):
+    """Serializer for updating order status"""
+    status = serializers.ChoiceField(choices=Order.STATUS_CHOICES)
+    notes = serializers.CharField(required=False)
+
+class TrackingNumberSerializer(serializers.Serializer):
+    """Serializer for updating tracking number"""
+    tracking_number = serializers.CharField()
+
+class CancelOrderSerializer(serializers.Serializer):
+    """Serializer for canceling an order"""
+    reason = serializers.CharField(required=False) 

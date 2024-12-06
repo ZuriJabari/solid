@@ -1,8 +1,7 @@
 from django.contrib import admin
-from .models import Order, OrderItem, OrderStatusHistory, OrderNote, DeliveryZone, ShippingAddress
+from .models import Order, OrderItem, OrderStatusHistory, OrderNote, DeliveryZone
 from config.admin import SecureModelAdmin, secure_admin_site
 
-@admin.register(DeliveryZone)
 class DeliveryZoneAdmin(admin.ModelAdmin):
     list_display = ['name', 'delivery_fee', 'estimated_days', 'is_active']
     list_filter = ['is_active']
@@ -27,7 +26,7 @@ class OrderNoteInline(admin.TabularInline):
 class SecureOrderAdmin(SecureModelAdmin):
     list_display = ('id', 'user', 'status', 'total', 'created_at')
     list_filter = ('status', 'payment_status', 'created_at')
-    search_fields = ('id', 'user__email', 'shipping_address__full_name')
+    search_fields = ('id', 'user__email', 'shipping_address')
     readonly_fields = ('created_at', 'updated_at', 'total')
     inlines = [OrderItemInline, OrderStatusHistoryInline, OrderNoteInline]
     
@@ -43,24 +42,19 @@ class SecureOrderAdmin(SecureModelAdmin):
         }),
     )
 
-class SecureShippingAddressAdmin(SecureModelAdmin):
-    list_display = ('full_name', 'city', 'country', 'created_at')
-    list_filter = ('country', 'city')
-    search_fields = ('full_name', 'street_address', 'city')
-    readonly_fields = ('created_at', 'updated_at')
-
-# Register with both default admin site and secure admin site
+# Register with both admin sites
 admin.site.register(Order, SecureOrderAdmin)
-admin.site.register(ShippingAddress, SecureShippingAddressAdmin)
-
 secure_admin_site.register(Order, SecureOrderAdmin)
-secure_admin_site.register(ShippingAddress, SecureShippingAddressAdmin)
+
+# Register DeliveryZone with both admin sites
+admin.site.register(DeliveryZone, DeliveryZoneAdmin)
+secure_admin_site.register(DeliveryZone, DeliveryZoneAdmin)
 
 @admin.register(OrderNote)
 class OrderNoteAdmin(admin.ModelAdmin):
     list_display = ['order', 'created_by', 'is_public', 'created_at']
     list_filter = ['is_public', 'created_at']
-    search_fields = ['order__order_number', 'note']
+    search_fields = ['order__id', 'note']
     readonly_fields = ['created_at', 'created_by']
 
     def save_model(self, request, obj, form, change):

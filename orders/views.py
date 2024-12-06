@@ -1,188 +1,145 @@
-from rest_framework import generics, viewsets, status
+from django.shortcuts import render
+from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from django.db.models import Q
-from django.utils import timezone
-from django.core.mail import send_mail
-from django.conf import settings
-from .models import Order, OrderStatusHistory, OrderNote, DeliveryZone
+from rest_framework.permissions import IsAuthenticated
+from django.shortcuts import get_object_or_404
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
+from .models import Order, OrderNote
 from .serializers import (
     OrderListSerializer, OrderDetailSerializer, OrderCreateSerializer,
-    OrderStatusHistorySerializer, OrderNoteSerializer, DeliveryZoneSerializer
+    OrderNoteSerializer, AddNoteSerializer, UpdateStatusSerializer,
+    TrackingNumberSerializer, CancelOrderSerializer
 )
+from core.serializers import ErrorSerializer, SuccessSerializer
 
-class DeliveryZoneViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = DeliveryZone.objects.filter(is_active=True)
-    serializer_class = DeliveryZoneSerializer
-    permission_classes = [IsAuthenticated]
-
+@extend_schema_view(
+    list=extend_schema(
+        description='List all orders for the current user',
+        responses={200: OrderListSerializer(many=True)}
+    ),
+    retrieve=extend_schema(
+        description='Get a specific order by ID',
+        responses={200: OrderDetailSerializer}
+    ),
+    create=extend_schema(
+        description='Create a new order',
+        request=OrderCreateSerializer,
+        responses={201: OrderDetailSerializer}
+    ),
+)
 class OrderViewSet(viewsets.ModelViewSet):
+    """
+    API endpoints for managing orders.
+    """
     permission_classes = [IsAuthenticated]
+    serializer_class = OrderDetailSerializer
 
     def get_queryset(self):
-        user = self.request.user
-        if user.is_staff:
-            return Order.objects.all().select_related(
-                'user', 'delivery_zone'
-            ).prefetch_related(
-                'items', 'items__product',
-                'status_history', 'notes'
-            )
-        return Order.objects.filter(user=user).select_related(
-            'delivery_zone'
-        ).prefetch_related(
-            'items', 'items__product',
-            'status_history', 'notes'
-        )
+        if getattr(self, 'swagger_fake_view', False):
+            return Order.objects.none()
+        return Order.objects.filter(user=self.request.user)
 
     def get_serializer_class(self):
-        if self.action == 'create':
+        if self.action == 'list':
+            return OrderListSerializer
+        elif self.action == 'create':
             return OrderCreateSerializer
-        elif self.action in ['retrieve', 'update', 'partial_update']:
-            return OrderDetailSerializer
-        return OrderListSerializer
+        return OrderDetailSerializer
 
-    def perform_create(self, serializer):
-        order = serializer.save()
-        # Send order confirmation email
-        self._send_order_confirmation(order)
-
-    @action(detail=True, methods=['post'])
-    def update_status(self, request, pk=None):
-        order = self.get_object()
-        new_status = request.data.get('status')
-        notes = request.data.get('notes', '')
-
-        if new_status not in dict(Order.STATUS_CHOICES):
-            return Response(
-                {'error': 'Invalid status'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Create status history entry
-        OrderStatusHistory.objects.create(
-            order=order,
-            status=new_status,
-            notes=notes,
-            created_by=request.user
-        )
-
-        # Update order status
-        order.status = new_status
-        order.save()
-
-        # Send notification
-        self._send_status_update_notification(order)
-
-        return Response(OrderDetailSerializer(order).data)
-
+    @extend_schema(
+        description='Add a note to an order',
+        request=AddNoteSerializer,
+        responses={
+            200: OrderDetailSerializer,
+            400: ErrorSerializer,
+            404: ErrorSerializer,
+        }
+    )
     @action(detail=True, methods=['post'])
     def add_note(self, request, pk=None):
         order = self.get_object()
-        serializer = OrderNoteSerializer(data=request.data)
-        
+        serializer = AddNoteSerializer(data=request.data)
         if serializer.is_valid():
-            note = serializer.save(
+            OrderNote.objects.create(
                 order=order,
+                note=serializer.validated_data['note'],
+                is_public=serializer.validated_data['is_public'],
                 created_by=request.user
             )
-            return Response(
-                OrderNoteSerializer(note).data,
-                status=status.HTTP_201_CREATED
-            )
-        return Response(
-            serializer.errors,
-            status=status.HTTP_400_BAD_REQUEST
-        )
+            return Response(self.get_serializer(order).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=True)
-    def status_history(self, request, pk=None):
+    @extend_schema(
+        description='Update order status',
+        request=UpdateStatusSerializer,
+        responses={
+            200: OrderDetailSerializer,
+            400: ErrorSerializer,
+            404: ErrorSerializer,
+        }
+    )
+    @action(detail=True, methods=['post'])
+    def update_status(self, request, pk=None):
         order = self.get_object()
-        history = order.status_history.all()
-        serializer = OrderStatusHistorySerializer(history, many=True)
-        return Response(serializer.data)
+        serializer = UpdateStatusSerializer(data=request.data)
+        if serializer.is_valid():
+            order.status = serializer.validated_data['status']
+            order.save()
+            if 'notes' in serializer.validated_data:
+                OrderNote.objects.create(
+                    order=order,
+                    note=serializer.validated_data['notes'],
+                    created_by=request.user
+                )
+            return Response(self.get_serializer(order).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False)
-    def my_orders(self, request):
-        orders = self.get_queryset().filter(user=request.user)
-        page = self.paginate_queryset(orders)
-        if page is not None:
-            serializer = OrderListSerializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-        serializer = OrderListSerializer(orders, many=True)
-        return Response(serializer.data)
+    @extend_schema(
+        description='Update tracking number',
+        request=TrackingNumberSerializer,
+        responses={
+            200: OrderDetailSerializer,
+            400: ErrorSerializer,
+            404: ErrorSerializer,
+        }
+    )
+    @action(detail=True, methods=['post'])
+    def update_tracking(self, request, pk=None):
+        order = self.get_object()
+        serializer = TrackingNumberSerializer(data=request.data)
+        if serializer.is_valid():
+            order.tracking_number = serializer.validated_data['tracking_number']
+            order.save()
+            return Response(self.get_serializer(order).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False, permission_classes=[IsAdminUser])
-    def pending_orders(self, request):
-        orders = self.get_queryset().filter(
-            Q(status='pending') | Q(status='paid')
-        )
-        serializer = OrderListSerializer(orders, many=True)
-        return Response(serializer.data)
-
-    @action(detail=False, permission_classes=[IsAdminUser])
-    def today_orders(self, request):
-        today = timezone.now().date()
-        orders = self.get_queryset().filter(
-            created_at__date=today
-        )
-        serializer = OrderListSerializer(orders, many=True)
-        return Response(serializer.data)
-
-    def _send_order_confirmation(self, order):
-        subject = f'Order Confirmation - {order.order_number}'
-        message = f"""
-        Thank you for your order!
-
-        Order Number: {order.order_number}
-        Total Amount: ${order.total}
-        
-        {'Delivery' if order.delivery_method == 'delivery' else 'Pickup'} Details:
-        {order.delivery_address if order.delivery_method == 'delivery' else order.pickup_location}
-        
-        We will notify you when your order status changes.
-        """
-        try:
-            send_mail(
-                subject,
-                message,
-                settings.DEFAULT_FROM_EMAIL,
-                [order.user.email],
-                fail_silently=True,
-            )
-        except Exception as e:
-            print(f"Failed to send order confirmation email: {e}")
-
-    def _send_status_update_notification(self, order):
-        subject = f'Order Status Update - {order.order_number}'
-        message = f"""
-        Your order status has been updated.
-
-        Order Number: {order.order_number}
-        New Status: {order.get_status_display()}
-        
-        {'Tracking Number: ' + order.tracking_number if order.tracking_number else ''}
-        """
-        try:
-            send_mail(
-                subject,
-                message,
-                settings.DEFAULT_FROM_EMAIL,
-                [order.user.email],
-                fail_silently=True,
-            )
-        except Exception as e:
-            print(f"Failed to send status update email: {e}")
-
-class OrderNoteViewSet(viewsets.ModelViewSet):
-    serializer_class = OrderNoteSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        user = self.request.user
-        if user.is_staff:
-            return OrderNote.objects.all()
-        return OrderNote.objects.filter(
-            Q(order__user=user) & Q(is_public=True)
-        )
+    @extend_schema(
+        description='Cancel an order',
+        request=CancelOrderSerializer,
+        responses={
+            200: OrderDetailSerializer,
+            400: ErrorSerializer,
+            404: ErrorSerializer,
+        }
+    )
+    @action(detail=True, methods=['post'])
+    def cancel(self, request, pk=None):
+        order = self.get_object()
+        serializer = CancelOrderSerializer(data=request.data)
+        if serializer.is_valid():
+            if order.status not in ['pending', 'processing']:
+                return Response(
+                    {'error': 'Order cannot be canceled in its current state'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            order.status = 'canceled'
+            order.save()
+            if 'reason' in serializer.validated_data:
+                OrderNote.objects.create(
+                    order=order,
+                    note=f"Order canceled: {serializer.validated_data['reason']}",
+                    created_by=request.user
+                )
+            return Response(self.get_serializer(order).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

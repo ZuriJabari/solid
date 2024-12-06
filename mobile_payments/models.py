@@ -27,13 +27,17 @@ class MobilePaymentProvider(models.Model):
 
 class MobilePayment(models.Model):
     """Model for mobile money payments"""
-    PAYMENT_STATUS_CHOICES = [
+    PROVIDER_CHOICES = [
+        ('MTN', 'MTN Mobile Money'),
+        ('AIRTEL', 'Airtel Money'),
+    ]
+
+    STATUS_CHOICES = [
         ('PENDING', 'Pending'),
         ('PROCESSING', 'Processing'),
-        ('SUCCESSFUL', 'Successful'),
+        ('COMPLETED', 'Completed'),
         ('FAILED', 'Failed'),
         ('CANCELLED', 'Cancelled'),
-        ('REFUNDED', 'Refunded'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -44,58 +48,39 @@ class MobilePayment(models.Model):
     )
     order = models.ForeignKey(
         Order,
-        on_delete=models.PROTECT,
+        on_delete=models.CASCADE,
         related_name='mobile_payments'
     )
-    provider = models.ForeignKey(
-        MobilePaymentProvider,
-        on_delete=models.PROTECT,
-        related_name='payments'
+    provider = models.CharField(
+        max_length=10,
+        choices=PROVIDER_CHOICES
     )
-    
-    # Payment details
-    amount = models.DecimalField(
-        _('amount'),
-        max_digits=10,
-        decimal_places=2
+    phone_number = models.CharField(max_length=15)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending'
     )
-    currency = models.CharField(
-        _('currency'),
-        max_length=3,
-        default='UGX'
-    )
-    phone_number = models.CharField(_('phone number'), max_length=20)
-    
-    # Transaction details
-    provider_tx_id = models.CharField(
-        _('provider transaction ID'),
-        max_length=255,
+    transaction_id = models.CharField(
+        max_length=100,
+        unique=True,
+        null=True,
         blank=True
     )
-    provider_tx_ref = models.CharField(
-        _('provider transaction reference'),
-        max_length=255,
-        unique=True
-    )
-    status = models.CharField(
-        _('status'),
-        max_length=20,
-        choices=PAYMENT_STATUS_CHOICES,
-        default='PENDING'
-    )
-    
-    # Metadata
-    created_at = models.DateTimeField(_('created at'), auto_now_add=True)
-    updated_at = models.DateTimeField(_('updated at'), auto_now=True)
-    completed_at = models.DateTimeField(_('completed at'), null=True, blank=True)
-    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
-        verbose_name = _('mobile payment')
-        verbose_name_plural = _('mobile payments')
         ordering = ['-created_at']
-    
+        indexes = [
+            models.Index(fields=['transaction_id']),
+            models.Index(fields=['status']),
+            models.Index(fields=['created_at']),
+        ]
+
     def __str__(self):
-        return f"{self.provider.name} payment of {self.amount} {self.currency} for order {self.order.id}"
+        return f"{self.provider} payment for order {self.order.id}"
 
     def save(self, *args, **kwargs):
         if self.status == 'SUCCESSFUL' and not self.completed_at:

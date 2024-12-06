@@ -1,135 +1,192 @@
-from django.shortcuts import render
-from rest_framework import viewsets, generics, status, permissions
+from django.contrib.auth import get_user_model, login, logout
+from rest_framework import viewsets, status, generics
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
-from django.contrib.auth import get_user_model
+from rest_framework.views import APIView
+from django.shortcuts import get_object_or_404
+from django.contrib.auth import authenticate
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from .models import Address, UserPreference
 from .serializers import (
-    UserSerializer, UserRegistrationSerializer, AddressSerializer,
-    UserPreferenceSerializer, PasswordChangeSerializer
+    UserSerializer, UserRegistrationSerializer,
+    AddressSerializer, UserPreferenceSerializer,
+    PasswordChangeSerializer, LoginSerializer,
+    LogoutSerializer, ProductIdSerializer,
+    DefaultAddressesSerializer
 )
+from core.serializers import ErrorSerializer, MessageSerializer, SuccessSerializer
 
 User = get_user_model()
 
 class UserViewSet(viewsets.ModelViewSet):
+    """
+    API endpoints for managing users.
+    """
     queryset = User.objects.all()
+    serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
-    
-    def get_serializer_class(self):
-        if self.action == 'create':
-            return UserRegistrationSerializer
-        return UserSerializer
-    
-    def get_permissions(self):
-        if self.action == 'create':
-            return [AllowAny()]
-        return [IsAuthenticated()]
-    
-    def get_queryset(self):
-        # Regular users can only see their own profile
-        if not self.request.user.is_staff:
-            return User.objects.filter(id=self.request.user.id)
-        return User.objects.all()
 
-    @action(detail=False, methods=['get', 'put', 'patch'])
-    def me(self, request):
-        user = request.user
-        if request.method == 'GET':
-            serializer = self.get_serializer(user)
-            return Response(serializer.data)
-        
-        serializer = self.get_serializer(user, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return User.objects.none()
+        return User.objects.filter(id=self.request.user.id)
 
     @action(detail=False, methods=['post'])
     def change_password(self, request):
-        user = request.user
+        """Change user password"""
         serializer = PasswordChangeSerializer(data=request.data)
-        
         if serializer.is_valid():
-            if not user.check_password(serializer.validated_data['old_password']):
-                return Response(
-                    {'old_password': 'Wrong password.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            user.set_password(serializer.validated_data['new_password'])
-            user.save()
-            return Response({'status': 'password changed'})
-        
+            user = request.user
+            if user.check_password(serializer.validated_data['old_password']):
+                user.set_password(serializer.validated_data['new_password'])
+                user.save()
+                return Response({'message': 'Password changed successfully'})
+            return Response(
+                {'error': 'Invalid old password'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class AddressViewSet(viewsets.ModelViewSet):
+    """
+    API endpoints for managing addresses.
+    """
     serializer_class = AddressSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return Address.objects.none()
         return Address.objects.filter(user=self.request.user)
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-    @action(detail=True, methods=['post'])
-    def set_default(self, request, pk=None):
-        address = self.get_object()
-        address_type = address.address_type
-        
-        # Remove default status from other addresses of the same type
-        Address.objects.filter(
-            user=request.user,
-            address_type=address_type,
-            is_default=True
-        ).update(is_default=False)
-        
-        # Set this address as default
-        address.is_default = True
-        address.save()
-        
-        return Response({'status': f'Address set as default {address_type.lower()}'})
-
 class UserPreferenceViewSet(viewsets.ModelViewSet):
+    """
+    API endpoints for managing user preferences.
+    """
     serializer_class = UserPreferenceSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return UserPreference.objects.none()
         return UserPreference.objects.filter(user=self.request.user)
 
     @action(detail=True, methods=['post'])
-    def set_default_addresses(self, request, pk=None):
+    def add_to_wishlist(self, request, pk=None):
+        """Add a product to the user's wishlist"""
         preference = self.get_object()
-        shipping_address_id = request.data.get('default_shipping_address')
-        billing_address_id = request.data.get('default_billing_address')
-        
-        if shipping_address_id:
-            try:
-                shipping_address = Address.objects.get(
-                    id=shipping_address_id,
+        serializer = ProductIdSerializer(data=request.data)
+        if serializer.is_valid():
+            preference.wishlist_items.add(serializer.validated_data['product_id'])
+            return Response(self.get_serializer(preference).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def remove_from_wishlist(self, request, pk=None):
+        """Remove a product from the user's wishlist"""
+        preference = self.get_object()
+        serializer = ProductIdSerializer(data=request.data)
+        if serializer.is_valid():
+            preference.wishlist_items.remove(serializer.validated_data['product_id'])
+            return Response(self.get_serializer(preference).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def add_to_saved(self, request, pk=None):
+        """Add a product to the user's saved items"""
+        preference = self.get_object()
+        serializer = ProductIdSerializer(data=request.data)
+        if serializer.is_valid():
+            preference.saved_items.add(serializer.validated_data['product_id'])
+            return Response(self.get_serializer(preference).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def remove_from_saved(self, request, pk=None):
+        """Remove a product from the user's saved items"""
+        preference = self.get_object()
+        serializer = ProductIdSerializer(data=request.data)
+        if serializer.is_valid():
+            preference.saved_items.remove(serializer.validated_data['product_id'])
+            return Response(self.get_serializer(preference).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def update_default_addresses(self, request, pk=None):
+        """Update default shipping and billing addresses"""
+        preference = self.get_object()
+        serializer = DefaultAddressesSerializer(data=request.data)
+        if serializer.is_valid():
+            if 'default_shipping_address' in serializer.validated_data:
+                address = get_object_or_404(
+                    Address,
+                    id=serializer.validated_data['default_shipping_address'],
                     user=request.user
                 )
-                preference.default_shipping_address = shipping_address
-            except Address.DoesNotExist:
-                return Response(
-                    {'error': 'Invalid shipping address ID'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        
-        if billing_address_id:
-            try:
-                billing_address = Address.objects.get(
-                    id=billing_address_id,
+                preference.default_shipping_address = address
+            if 'default_billing_address' in serializer.validated_data:
+                address = get_object_or_404(
+                    Address,
+                    id=serializer.validated_data['default_billing_address'],
                     user=request.user
                 )
-                preference.default_billing_address = billing_address
-            except Address.DoesNotExist:
-                return Response(
-                    {'error': 'Invalid billing address ID'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-        
-        preference.save()
-        serializer = self.get_serializer(preference)
-        return Response(serializer.data)
+                preference.default_billing_address = address
+            preference.save()
+            return Response(self.get_serializer(preference).data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class RegisterView(generics.CreateAPIView):
+    """
+    API endpoint for user registration.
+    """
+    serializer_class = UserRegistrationSerializer
+    permission_classes = [AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            return Response(
+                {'message': 'Registration successful'},
+                status=status.HTTP_201_CREATED
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class LoginView(APIView):
+    """
+    API endpoint for user login.
+    """
+    permission_classes = [AllowAny]
+    serializer_class = LoginSerializer
+
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        if serializer.is_valid():
+            user = authenticate(
+                request,
+                username=serializer.validated_data['email'],
+                password=serializer.validated_data['password']
+            )
+            if user and user.is_active:
+                login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+                return Response({'message': 'Login successful'})
+            return Response(
+                {'error': 'Invalid credentials'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class LogoutView(APIView):
+    """
+    API endpoint for user logout.
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = LogoutSerializer
+
+    def post(self, request):
+        logout(request)
+        return Response({'message': 'Logout successful'})
