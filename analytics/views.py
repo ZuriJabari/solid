@@ -2,10 +2,11 @@ from django.shortcuts import render
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 from django.db.models import Sum, Avg, Count, F
 from django.utils import timezone
 from datetime import timedelta
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from .models import (
     SalesMetric, InventoryMetric,
     CustomerMetric, ProductPerformance
@@ -18,147 +19,102 @@ from .serializers import (
 from products.models import Product
 from orders.models import Order
 
+@extend_schema_view(
+    list=extend_schema(description='List analytics metrics'),
+    retrieve=extend_schema(description='Retrieve specific analytics metric'),
+)
 class AnalyticsViewSet(viewsets.ReadOnlyModelViewSet):
-    """ViewSet for viewing analytics data"""
-    
+    """
+    ViewSet for analytics metrics.
+    """
+    permission_classes = [IsAuthenticated]
+    queryset = SalesMetric.objects.none()  # Default queryset
+    serializer_class = SalesMetricSerializer
+
+    def get_queryset(self):
+        """
+        Return appropriate queryset based on the action
+        """
+        if getattr(self, 'swagger_fake_view', False):
+            return self.queryset
+            
+        model_map = {
+            'sales': SalesMetric,
+            'inventory': InventoryMetric,
+            'customers': CustomerMetric,
+            'products': ProductPerformance,
+        }
+        
+        metric_type = self.request.query_params.get('type', 'sales')
+        model = model_map.get(metric_type, SalesMetric)
+        
+        # Default to last 30 days
+        end_date = timezone.now().date()
+        start_date = end_date - timedelta(days=30)
+        
+        return model.objects.filter(
+            date__range=[start_date, end_date]
+        ).order_by('-date')
+
     def get_serializer_class(self):
-        if self.action == 'sales':
-            return SalesMetricSerializer
-        elif self.action == 'inventory':
-            return InventoryMetricSerializer
-        elif self.action == 'customers':
-            return CustomerMetricSerializer
-        elif self.action == 'products':
-            return ProductPerformanceSerializer
-        elif self.action == 'generate_report':
-            return DateRangeSerializer
-        return AnalyticsSummarySerializer
-
-    @action(detail=False, methods=['get'])
-    def sales(self, request):
-        """Get sales metrics for the last 30 days"""
-        start_date = timezone.now().date() - timedelta(days=30)
-        metrics = SalesMetric.objects.filter(
-            date__gte=start_date
-        ).order_by('-date')
-        serializer = self.get_serializer(metrics, many=True)
-        return Response(serializer.data)
-
-    @action(detail=False, methods=['get'])
-    def inventory(self, request):
-        """Get inventory metrics for the last 30 days"""
-        start_date = timezone.now().date() - timedelta(days=30)
-        metrics = InventoryMetric.objects.filter(
-            date__gte=start_date
-        ).order_by('-date')
-        serializer = self.get_serializer(metrics, many=True)
-        return Response(serializer.data)
-
-    @action(detail=False, methods=['get'])
-    def customers(self, request):
-        """Get customer metrics for the last 30 days"""
-        start_date = timezone.now().date() - timedelta(days=30)
-        metrics = CustomerMetric.objects.filter(
-            date__gte=start_date
-        ).order_by('-date')
-        serializer = self.get_serializer(metrics, many=True)
-        return Response(serializer.data)
-
-    @action(detail=False, methods=['get'])
-    def products(self, request):
-        """Get product performance metrics for the last 30 days"""
-        start_date = timezone.now().date() - timedelta(days=30)
-        metrics = ProductPerformance.objects.filter(
-            date__gte=start_date
-        ).order_by('-date')
-        serializer = self.get_serializer(metrics, many=True)
-        return Response(serializer.data)
-
-    @action(detail=False, methods=['get'])
-    def summary(self, request):
-        """Get summary of all analytics metrics"""
-        # Get the latest metrics
-        latest_customer_metrics = CustomerMetric.objects.latest('date')
-        latest_sales = SalesMetric.objects.latest('date')
-        
-        # Get best selling products
-        best_selling = ProductPerformance.objects.order_by('-revenue')[:5]
-        
-        data = {
-            'total_revenue': latest_sales.total_sales,
-            'total_orders': latest_sales.order_count,
-            'average_order_value': latest_sales.average_order_value,
-            'total_customers': latest_customer_metrics.total_customers,
-            'best_selling_products': ProductPerformanceSerializer(
-                best_selling, many=True
-            ).data,
-            'customer_retention_rate': (
-                latest_customer_metrics.returning_customers /
-                latest_customer_metrics.total_customers * 100
-                if latest_customer_metrics.total_customers > 0 else 0
-            ),
-            'inventory_turnover_rate': self._calculate_inventory_turnover()
+        """
+        Return appropriate serializer class
+        """
+        serializer_map = {
+            'sales': SalesMetricSerializer,
+            'inventory': InventoryMetricSerializer,
+            'customers': CustomerMetricSerializer,
+            'products': ProductPerformanceSerializer,
         }
         
-        serializer = self.get_serializer(data)
-        return Response(serializer.data)
+        metric_type = self.request.query_params.get('type', 'sales')
+        return serializer_map.get(metric_type, SalesMetricSerializer)
 
-    def _calculate_inventory_turnover(self):
-        """Calculate the inventory turnover rate"""
-        latest_metrics = InventoryMetric.objects.order_by('-date')
-        if not latest_metrics.exists():
-            return 0
-        
-        total_sold = latest_metrics.aggregate(
-            sold=Sum('units_sold')
-        )['sold'] or 0
-        total_stock = latest_metrics.aggregate(
-            stock=Sum('closing_stock')
-        )['stock'] or 1  # Avoid division by zero
-        
-        return (total_sold / total_stock) * 100
-
+    @extend_schema(
+        request=DateRangeSerializer,
+        responses={200: AnalyticsSummarySerializer}
+    )
     @action(detail=False, methods=['post'])
-    def generate_report(self, request):
-        """Generate a detailed analytics report for a date range"""
-        serializer = self.get_serializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(
-                serializer.errors,
-                status=status.HTTP_400_BAD_REQUEST
+    def summary(self, request):
+        """Get analytics summary for a date range"""
+        serializer = DateRangeSerializer(data=request.data)
+        if serializer.is_valid():
+            start_date = serializer.validated_data['start_date']
+            end_date = serializer.validated_data['end_date']
+            
+            # Calculate summary metrics
+            sales_metrics = SalesMetric.objects.filter(
+                date__range=[start_date, end_date]
+            ).aggregate(
+                total_revenue=models.Sum('total_sales'),
+                total_orders=models.Sum('order_count'),
+                avg_order_value=models.Avg('average_order_value')
             )
-        
-        start_date = serializer.validated_data['start_date']
-        end_date = serializer.validated_data['end_date']
-        
-        # Get metrics for the date range
-        sales_metrics = SalesMetric.objects.filter(
-            date__range=(start_date, end_date)
-        )
-        inventory_metrics = InventoryMetric.objects.filter(
-            date__range=(start_date, end_date)
-        )
-        customer_metrics = CustomerMetric.objects.filter(
-            date__range=(start_date, end_date)
-        )
-        product_metrics = ProductPerformance.objects.filter(
-            date__range=(start_date, end_date)
-        )
-        
-        # Compile report data
-        report = {
-            'sales': SalesMetricSerializer(
-                sales_metrics, many=True
-            ).data,
-            'inventory': InventoryMetricSerializer(
-                inventory_metrics, many=True
-            ).data,
-            'customers': CustomerMetricSerializer(
-                customer_metrics, many=True
-            ).data,
-            'products': ProductPerformanceSerializer(
-                product_metrics, many=True
-            ).data
-        }
-        
-        return Response(report)
+            
+            customer_metrics = CustomerMetric.objects.filter(
+                date__range=[start_date, end_date]
+            ).aggregate(
+                total_customers=models.Max('total_customers'),
+                retention_rate=models.Avg('returning_customers')
+            )
+            
+            # Get best selling products
+            best_sellers = ProductPerformance.objects.filter(
+                date__range=[start_date, end_date]
+            ).order_by('-revenue')[:5]
+            
+            summary_data = {
+                'total_revenue': sales_metrics['total_revenue'] or 0,
+                'total_orders': sales_metrics['total_orders'] or 0,
+                'average_order_value': sales_metrics['avg_order_value'] or 0,
+                'total_customers': customer_metrics['total_customers'] or 0,
+                'best_selling_products': ProductPerformanceSerializer(best_sellers, many=True).data,
+                'customer_retention_rate': customer_metrics['retention_rate'] or 0,
+                'inventory_turnover_rate': 0  # Placeholder for now
+            }
+            
+            serializer = AnalyticsSummarySerializer(data=summary_data)
+            serializer.is_valid(raise_exception=True)
+            return Response(serializer.data)
+            
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

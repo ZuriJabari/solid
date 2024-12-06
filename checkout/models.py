@@ -2,6 +2,7 @@ from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator
 from decimal import Decimal
+from config.currency import MIN_AMOUNT, MAX_AMOUNT, CURRENCY_DECIMAL_PLACES
 
 class Order(models.Model):
     """Model for orders"""
@@ -100,15 +101,16 @@ class PaymentMethod(models.Model):
     is_active = models.BooleanField(default=True)
     requires_verification = models.BooleanField(default=False)
     min_amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        validators=[MinValueValidator(Decimal('0.00'))]
+        max_digits=12,
+        decimal_places=CURRENCY_DECIMAL_PLACES,
+        validators=[MinValueValidator(Decimal('0'))],
+        default=MIN_AMOUNT
     )
     max_amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        validators=[MinValueValidator(Decimal('0.00'))],
-        default=Decimal('9999999.99')
+        max_digits=12,
+        decimal_places=CURRENCY_DECIMAL_PLACES,
+        validators=[MinValueValidator(Decimal('0'))],
+        default=MAX_AMOUNT
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -152,9 +154,22 @@ class CheckoutSession(models.Model):
         blank=True,
         on_delete=models.SET_NULL
     )
-    subtotal = models.DecimalField(max_digits=10, decimal_places=2)
-    delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    total = models.DecimalField(max_digits=10, decimal_places=2)
+    subtotal = models.DecimalField(
+        max_digits=12,
+        decimal_places=CURRENCY_DECIMAL_PLACES,
+        validators=[MinValueValidator(Decimal('0'))]
+    )
+    delivery_fee = models.DecimalField(
+        max_digits=12,
+        decimal_places=CURRENCY_DECIMAL_PLACES,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))]
+    )
+    total = models.DecimalField(
+        max_digits=12,
+        decimal_places=CURRENCY_DECIMAL_PLACES,
+        validators=[MinValueValidator(Decimal('0'))]
+    )
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,

@@ -5,6 +5,7 @@ from django.utils.text import slugify
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 from decimal import Decimal
+from config.currency import MIN_AMOUNT, MAX_AMOUNT, CURRENCY_DECIMAL_PLACES
 
 class Category(MPTTModel):
     name = models.CharField(max_length=200)
@@ -35,7 +36,15 @@ class Product(models.Model):
     name = models.CharField(max_length=200)
     slug = models.SlugField(max_length=200, unique=True)
     description = models.TextField()
-    price = models.DecimalField(max_digits=10, decimal_places=2)
+    price = models.DecimalField(
+        max_digits=12,
+        decimal_places=CURRENCY_DECIMAL_PLACES,
+        validators=[
+            MinValueValidator(MIN_AMOUNT),
+            MaxValueValidator(MAX_AMOUNT)
+        ]
+    )
+    stock = models.PositiveIntegerField(default=0)
     image = models.ImageField(upload_to='products/', null=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(default=timezone.now)
@@ -87,10 +96,13 @@ class ProductVariant(models.Model):
     sku = models.CharField(max_length=100, unique=True)
     option_values = models.ManyToManyField(ProductOptionValue, related_name='variants')
     price_adjustment = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        default=Decimal('0.00'),
-        validators=[MinValueValidator(Decimal('-999999.99')), MaxValueValidator(Decimal('999999.99'))]
+        max_digits=12,
+        decimal_places=CURRENCY_DECIMAL_PLACES,
+        default=Decimal('0'),
+        validators=[
+            MinValueValidator(Decimal('-999999999')),
+            MaxValueValidator(Decimal('999999999'))
+        ]
     )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(default=timezone.now)
@@ -108,9 +120,9 @@ class BulkPricing(models.Model):
     product = models.ForeignKey(Product, related_name='bulk_prices', on_delete=models.CASCADE)
     min_quantity = models.PositiveIntegerField()
     price = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2,
-        validators=[MinValueValidator(Decimal('0.01'))]
+        max_digits=12,
+        decimal_places=CURRENCY_DECIMAL_PLACES,
+        validators=[MinValueValidator(MIN_AMOUNT)]
     )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(default=timezone.now)

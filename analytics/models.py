@@ -36,23 +36,14 @@ class SalesMetric(models.Model):
 class InventoryMetric(models.Model):
     """Model for tracking inventory movements and stock levels"""
     date = models.DateField(default=timezone.now)
-    product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    opening_stock = models.PositiveIntegerField()
-    closing_stock = models.PositiveIntegerField()
-    units_sold = models.PositiveIntegerField(default=0)
-    units_refunded = models.PositiveIntegerField(default=0)
-    restock_amount = models.PositiveIntegerField(default=0)
-    low_stock_alerts = models.PositiveIntegerField(default=0)
+    metrics_data = models.JSONField(default=dict)
 
     class Meta:
-        ordering = ['-date', 'product']
-        indexes = [
-            models.Index(fields=['date', 'product']),
-            models.Index(fields=['product', 'date'])
-        ]
+        ordering = ['-date']
+        indexes = [models.Index(fields=['date'])]
 
     def __str__(self):
-        return f"Inventory Metrics for {self.product.name} on {self.date}"
+        return f"Inventory Metrics for {self.date}"
 
 class CustomerMetric(models.Model):
     """Model for tracking customer behavior and engagement"""

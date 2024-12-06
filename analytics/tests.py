@@ -43,10 +43,14 @@ class AnalyticsModelTests(TestCase):
         
         self.inventory_metric = InventoryMetric.objects.create(
             date=timezone.now().date(),
-            product=self.product,
-            opening_stock=100,
-            closing_stock=90,
-            units_sold=10
+            metrics_data={
+                str(self.product.id): {
+                    'product_name': self.product.name,
+                    'opening_stock': 100,
+                    'current_stock': 90,
+                    'units_sold': 10
+                }
+            }
         )
         
         self.customer_metric = CustomerMetric.objects.create(
@@ -78,7 +82,7 @@ class AnalyticsModelTests(TestCase):
         """Test the string representation of InventoryMetric"""
         self.assertEqual(
             str(self.inventory_metric),
-            f"Inventory Metrics for {self.product.name} on {self.inventory_metric.date}"
+            f"Inventory Metrics for {self.inventory_metric.date}"
         )
 
     def test_customer_metric_str(self):
@@ -190,23 +194,26 @@ class AnalyticsAdminTests(TestCase):
         url = reverse('admin:analytics_salesmetric_changelist')
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'UGX 999.99')
+        self.assertContains(response, 'USh 1,000')
         self.assertContains(response, '10')  # order_count
 
     def test_inventory_metric_admin(self):
         """Test inventory metric admin list view"""
         metric = InventoryMetric.objects.create(
             date=timezone.now().date(),
-            product=self.product,
-            opening_stock=100,
-            closing_stock=90,
-            units_sold=10
+            metrics_data={
+                str(self.product.id): {
+                    'product_name': self.product.name,
+                    'opening_stock': 100,
+                    'current_stock': 90,
+                    'units_sold': 10
+                }
+            }
         )
         url = reverse('admin:analytics_inventorymetric_changelist')
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'Test Product')
-        self.assertContains(response, '100')  # opening_stock
+        self.assertContains(response, '1 products tracked')
 
     def test_customer_metric_admin(self):
         """Test customer metric admin list view"""

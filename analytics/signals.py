@@ -27,7 +27,7 @@ def update_sales_metrics(sender, instance, created, **kwargs):
     )
     
     metrics.total_sales = daily_orders.aggregate(
-        total=Sum('total_amount')
+        total=Sum('total')
     )['total'] or 0
     
     metrics.order_count = daily_orders.count()
@@ -40,57 +40,38 @@ def update_sales_metrics(sender, instance, created, **kwargs):
     # Update refund metrics
     refunded_orders = daily_orders.filter(status='refunded')
     metrics.refund_amount = refunded_orders.aggregate(
-        total=Sum('total_amount')
+        total=Sum('total')
     )['total'] or 0
     metrics.refund_count = refunded_orders.count()
     
     metrics.save()
 
 @receiver(post_save, sender=Order)
-def update_inventory_metrics(sender, instance, created, **kwargs):
-    """Update inventory metrics when an order is created or modified"""
-    date = instance.created_at.date()
+def update_inventory_metrics(sender, instance, **kwargs):
+    """Update inventory metrics when an order is saved"""
+    from analytics.models import InventoryMetric
     
-    # Update metrics for each product in the order
-    for item in instance.items.all():
-        product = item.product
-        
-        # Get or create metrics for today and this product
-        metrics, created = InventoryMetric.objects.get_or_create(
-            date=date,
-            product=product,
-            defaults={
-                'opening_stock': product.stock,
-                'closing_stock': product.stock
+    # Get or create metrics for today
+    today = timezone.now().date()
+    metrics, created = InventoryMetric.objects.get_or_create(date=today)
+    
+    # Get all products in the order
+    products = set()
+    if hasattr(instance, 'items'):
+        for item in instance.items.all():
+            products.add(item.product)
+    
+    # Update metrics for each product
+    for product in products:
+        metrics.metrics_data.update({
+            str(product.id): {
+                'product_name': product.name,
+                'opening_stock': getattr(product, 'stock', 0),
+                'current_stock': getattr(product, 'stock', 0),
+                'units_sold': instance.items.filter(product=product).aggregate(total=Sum('quantity'))['total'] or 0
             }
-        )
-        
-        if instance.status == 'completed':
-            metrics.units_sold = Order.objects.filter(
-                created_at__date=date,
-                status='completed',
-                items__product=product
-            ).aggregate(
-                total=Sum('items__quantity')
-            )['total'] or 0
-        
-        if instance.status == 'refunded':
-            metrics.units_refunded = Order.objects.filter(
-                created_at__date=date,
-                status='refunded',
-                items__product=product
-            ).aggregate(
-                total=Sum('items__quantity')
-            )['total'] or 0
-        
-        # Update closing stock
-        metrics.closing_stock = product.stock
-        
-        # Check for low stock
-        if product.stock <= product.low_stock_threshold:
-            metrics.low_stock_alerts += 1
-        
-        metrics.save()
+        })
+    metrics.save()
 
 @receiver([post_save, post_delete], sender=User)
 def update_customer_metrics(sender, instance, **kwargs):

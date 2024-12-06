@@ -3,11 +3,17 @@ from django.conf import settings
 from django.core.validators import MinValueValidator
 from products.models import Product
 import uuid
+from decimal import Decimal
+from config.currency import MIN_AMOUNT, MAX_AMOUNT, CURRENCY_DECIMAL_PLACES
 
 class DeliveryZone(models.Model):
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
-    delivery_fee = models.DecimalField(max_digits=10, decimal_places=2)
+    delivery_fee = models.DecimalField(
+        max_digits=12,
+        decimal_places=CURRENCY_DECIMAL_PLACES,
+        validators=[MinValueValidator(Decimal('0'))]
+    )
     estimated_days = models.PositiveIntegerField()
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -41,22 +47,22 @@ class Order(models.Model):
         default='pending'
     )
     subtotal = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        validators=[MinValueValidator(0)],
-        default=0
+        max_digits=12,
+        decimal_places=CURRENCY_DECIMAL_PLACES,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))]
     )
     delivery_fee = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        validators=[MinValueValidator(0)],
-        default=0
+        max_digits=12,
+        decimal_places=CURRENCY_DECIMAL_PLACES,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))]
     )
     total = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        validators=[MinValueValidator(0)],
-        default=0
+        max_digits=12,
+        decimal_places=CURRENCY_DECIMAL_PLACES,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))]
     )
     delivery_zone = models.ForeignKey(
         DeliveryZone,
@@ -94,7 +100,11 @@ class OrderItem(models.Model):
         on_delete=models.PROTECT
     )
     quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
-    price = models.DecimalField(max_digits=10, decimal_places=2)
+    price = models.DecimalField(
+        max_digits=12,
+        decimal_places=CURRENCY_DECIMAL_PLACES,
+        validators=[MinValueValidator(MIN_AMOUNT)]
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

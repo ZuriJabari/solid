@@ -13,23 +13,12 @@ class SalesMetricSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 class InventoryMetricSerializer(serializers.ModelSerializer):
-    product = ProductSerializer(read_only=True)
-    stock_turnover_rate = serializers.SerializerMethodField()
-
     class Meta:
         model = InventoryMetric
         fields = [
-            'id', 'date', 'product', 'opening_stock',
-            'closing_stock', 'units_sold', 'units_refunded',
-            'restock_amount', 'low_stock_alerts',
-            'stock_turnover_rate'
+            'id', 'date', 'metrics_data'
         ]
         read_only_fields = fields
-
-    def get_stock_turnover_rate(self, obj):
-        if obj.opening_stock == 0:
-            return 0
-        return round((obj.units_sold / obj.opening_stock) * 100, 2)
 
 class CustomerMetricSerializer(serializers.ModelSerializer):
     customer_retention_rate = serializers.SerializerMethodField()

@@ -248,7 +248,12 @@ SPECTACULAR_SETTINGS = {
     'TITLE': 'Urban Herb API',
     'DESCRIPTION': 'API for Urban Herb e-commerce platform',
     'VERSION': '1.0.0',
-    'SCHEMA_PATH_PREFIX': '/api',
+    'SERVE_INCLUDE_SCHEMA': True,
+    'SCHEMA_PATH_PREFIX': '/api/',
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SWAGGER_UI_SETTINGS': {
+        'displayOperationId': True,
+    },
 }
 
 # Currency settings

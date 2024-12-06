@@ -253,32 +253,38 @@ class OrderAdmin(admin.ModelAdmin):
         
         return TemplateResponse(request, 'admin/checkout/charts.html', context)
 
+@admin.register(DeliveryZone)
 class DeliveryZoneAdmin(SecureModelAdmin):
-    list_display = ['name', 'formatted_delivery_fee', 'estimated_days', 'is_active']
-    list_filter = ['is_active']
-    search_fields = ['name', 'description']
-
+    list_display = ('name', 'formatted_delivery_fee', 'estimated_days', 'is_active')
+    list_filter = ('is_active',)
+    search_fields = ('name',)
+    
     def formatted_delivery_fee(self, obj):
         return format_currency(obj.delivery_fee)
-    formatted_delivery_fee.short_description = _('Delivery Fee')
+    formatted_delivery_fee.short_description = 'Delivery Fee'
+    formatted_delivery_fee.admin_order_field = 'delivery_fee'
 
+@admin.register(PickupLocation)
 class PickupLocationAdmin(SecureModelAdmin):
-    list_display = ['name', 'address', 'contact_phone', 'is_active']
-    list_filter = ['is_active']
-    search_fields = ['name', 'address']
+    list_display = ('name', 'address', 'contact_phone', 'is_active')
+    list_filter = ('is_active',)
+    search_fields = ('name', 'address')
 
+@admin.register(PaymentMethod)
 class PaymentMethodAdmin(SecureModelAdmin):
-    list_display = ['name', 'provider', 'formatted_min_amount', 'formatted_max_amount', 'is_active']
-    list_filter = ['provider', 'is_active']
-    search_fields = ['name']
-
+    list_display = ('name', 'provider', 'formatted_min_amount', 'formatted_max_amount', 'is_active')
+    list_filter = ('provider', 'is_active')
+    search_fields = ('name', 'provider')
+    
     def formatted_min_amount(self, obj):
         return format_currency(obj.min_amount)
-    formatted_min_amount.short_description = _('Minimum Amount')
-
+    formatted_min_amount.short_description = 'Minimum Amount'
+    formatted_min_amount.admin_order_field = 'min_amount'
+    
     def formatted_max_amount(self, obj):
         return format_currency(obj.max_amount)
-    formatted_max_amount.short_description = _('Maximum Amount')
+    formatted_max_amount.short_description = 'Maximum Amount'
+    formatted_max_amount.admin_order_field = 'max_amount'
 
 class CheckoutSessionAdmin(SecureModelAdmin):
     list_display = ['id', 'user', 'status', 'formatted_total', 'created_at']
@@ -355,13 +361,7 @@ class CheckoutSessionAdmin(SecureModelAdmin):
         
         return super().changelist_view(request, extra_context=extra_context)
 
-# Register with both admin sites
-admin.site.register(DeliveryZone, DeliveryZoneAdmin)
-admin.site.register(PickupLocation, PickupLocationAdmin)
-admin.site.register(PaymentMethod, PaymentMethodAdmin)
-admin.site.register(CheckoutSession, CheckoutSessionAdmin)
-
-secure_admin_site.register(DeliveryZone, DeliveryZoneAdmin)
+# Register models with secure admin site
+secure_admin_site.register(Order, OrderAdmin)
 secure_admin_site.register(PickupLocation, PickupLocationAdmin)
-secure_admin_site.register(PaymentMethod, PaymentMethodAdmin)
 secure_admin_site.register(CheckoutSession, CheckoutSessionAdmin)

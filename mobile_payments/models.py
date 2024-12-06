@@ -5,6 +5,9 @@ from orders.models import Order
 import uuid
 from django.conf import settings
 from django.utils import timezone
+from django.core.validators import MinValueValidator, MaxValueValidator
+from decimal import Decimal
+from config.currency import MIN_AMOUNT, MAX_AMOUNT, CURRENCY_DECIMAL_PLACES, CURRENCY
 
 User = get_user_model()
 
@@ -56,7 +59,18 @@ class MobilePayment(models.Model):
         choices=PROVIDER_CHOICES
     )
     phone_number = models.CharField(max_length=15)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=CURRENCY_DECIMAL_PLACES,
+        validators=[
+            MinValueValidator(MIN_AMOUNT),
+            MaxValueValidator(MAX_AMOUNT)
+        ]
+    )
+    currency = models.CharField(
+        max_length=3,
+        default=CURRENCY
+    )
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
