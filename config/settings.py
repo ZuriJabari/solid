@@ -5,17 +5,22 @@ Django settings for config project.
 from pathlib import Path
 import os
 from datetime import timedelta
+from dotenv import load_dotenv
+from rest_framework.permissions import AllowAny
+import sys
+
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-9l3=^t!%#^v6l3@&6q=xz@)4_@0@8$0_$5l#)4@+_$0@8$0_$5'
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-9l3=^t!%#^v6l3@&6q=xz@)4_@0@8$0_$5l#)4@+_$0@8$0_$5')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DJANGO_DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 # Application definition
 INSTALLED_APPS = [
@@ -48,7 +53,6 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
-    'debug_toolbar.middleware.DebugToolbarMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -57,9 +61,13 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'config.middleware.SecurityHeadersMiddleware',
+    'debug_toolbar.middleware.DebugToolbarMiddleware',
     'axes.middleware.AxesMiddleware',
+    'config.middleware.SecurityHeadersMiddleware',
 ]
+
+# Remove None values from MIDDLEWARE
+MIDDLEWARE = [x for x in MIDDLEWARE if x is not None]
 
 ROOT_URLCONF = 'config.urls'
 
@@ -113,14 +121,14 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_DIRS = [
-    BASE_DIR / 'static',
+    os.path.join(BASE_DIR, 'static'),
 ]
 
 # Media files
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
@@ -134,21 +142,29 @@ SITE_URL = 'http://127.0.0.1:8002'
 # REST Framework settings
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
-    'DEFAULT_AUTHENTICATION_CLASSES': [
+    'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
-    ],
-    'DEFAULT_PERMISSION_CLASSES': [
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
-    ],
-    'DEFAULT_FILTER_BACKENDS': [
+    ),
+    'DEFAULT_FILTER_BACKENDS': (
         'django_filters.rest_framework.DjangoFilterBackend',
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
-    ],
+    ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle'
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/day',
+        'user': '1000/day',
+        'auth': '50/hour',
+    }
 }
 
 # JWT settings
@@ -165,20 +181,46 @@ LOGOUT_URL = '/admin/logout/'
 LOGIN_REDIRECT_URL = '/admin/'
 LOGOUT_REDIRECT_URL = '/admin/login/'
 
-# Swagger settings
-SWAGGER_SETTINGS = {
-    'USE_SESSION_AUTH': False,
+# DRF Spectacular settings
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Urban Herb API',
+    'DESCRIPTION': 'API for Urban Herb CBD E-commerce Platform',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': True,
+    'SWAGGER_UI_SETTINGS': {
+        'deepLinking': True,
+        'persistAuthorization': True,
+        'displayOperationId': True,
+        'filter': True,
+    },
     'SECURITY_DEFINITIONS': {
         'Bearer': {
             'type': 'apiKey',
             'name': 'Authorization',
-            'in': 'header'
+            'in': 'header',
+            'description': 'Enter your bearer token in the format: Bearer <token>'
         }
-    }
-}
-
-REDOC_SETTINGS = {
-    'LAZY_RENDERING': False,
+    },
+    'PREPROCESSING_HOOKS': [],
+    'POSTPROCESSING_HOOKS': [],
+    'DISABLE_ERRORS_AND_WARNINGS': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'COMPONENT_NO_READ_ONLY_REQUIRED': True,
+    'SCHEMA_PATH_PREFIX': '/api/',
+    'SCHEMA_COERCE_PATH_PK_SUFFIX': True,
+    'SCHEMA_COERCE_METHOD_NAMES': {
+        'retrieve': 'get',
+        'destroy': 'delete'
+    },
+    'TAGS': [
+        {'name': 'auth', 'description': 'Authentication endpoints'},
+        {'name': 'products', 'description': 'Product management endpoints'},
+        {'name': 'cart', 'description': 'Shopping cart endpoints'},
+        {'name': 'orders', 'description': 'Order management endpoints'},
+        {'name': 'checkout', 'description': 'Checkout process endpoints'},
+        {'name': 'payments', 'description': 'Payment processing endpoints'},
+        {'name': 'analytics', 'description': 'Analytics and reporting endpoints'},
+    ]
 }
 
 # Admin security settings
@@ -231,8 +273,32 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = True  # Change in production
+CORS_ALLOW_ALL_ORIGINS = True  # Only for development
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:8002',
+    'http://127.0.0.1:8002',
+]
+CORS_ALLOWED_ORIGIN_REGEXES = []
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
 
 # Debug toolbar settings
 INTERNAL_IPS = [
@@ -240,20 +306,7 @@ INTERNAL_IPS = [
 ]
 
 DEBUG_TOOLBAR_CONFIG = {
-    'SHOW_TOOLBAR_CALLBACK': lambda request: True,
-}
-
-# DRF Spectacular settings
-SPECTACULAR_SETTINGS = {
-    'TITLE': 'Urban Herb API',
-    'DESCRIPTION': 'API for Urban Herb e-commerce platform',
-    'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': True,
-    'SCHEMA_PATH_PREFIX': '/api/',
-    'COMPONENT_SPLIT_REQUEST': True,
-    'SWAGGER_UI_SETTINGS': {
-        'displayOperationId': True,
-    },
+    'SHOW_TOOLBAR_CALLBACK': lambda request: DEBUG and 'test' not in sys.argv,
 }
 
 # Currency settings

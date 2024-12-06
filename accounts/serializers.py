@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from .models import Address, UserPreference
 from products.models import Category
-from products.serializers import ProductSerializer
+from products.serializers import ProductListSerializer
 
 User = get_user_model()
 
@@ -19,8 +19,8 @@ class AddressSerializer(serializers.ModelSerializer):
 class UserPreferenceSerializer(serializers.ModelSerializer):
     default_shipping_address = AddressSerializer(read_only=True)
     default_billing_address = AddressSerializer(read_only=True)
-    wishlist_items = ProductSerializer(many=True, read_only=True)
-    saved_items = ProductSerializer(many=True, read_only=True)
+    wishlist_items = ProductListSerializer(many=True, read_only=True)
+    saved_items = ProductListSerializer(many=True, read_only=True)
     preferred_categories = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=Category.objects.all(),

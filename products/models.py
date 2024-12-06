@@ -243,3 +243,40 @@ class StockMovement(models.Model):
         
         self.inventory.save()
         super().save(*args, **kwargs)
+
+class ProductRecommendation(models.Model):
+    RECOMMENDATION_TYPES = [
+        ('similar', 'Similar Products'),
+        ('frequently_bought', 'Frequently Bought Together'),
+        ('personalized', 'Personalized Recommendation')
+    ]
+
+    source_product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='source_recommendations'
+    )
+    recommended_product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='target_recommendations'
+    )
+    recommendation_type = models.CharField(
+        max_length=20,
+        choices=RECOMMENDATION_TYPES
+    )
+    score = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        validators=[MinValueValidator(Decimal('0'))]
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('source_product', 'recommended_product', 'recommendation_type')
+        ordering = ['-score', '-created_at']
+
+    def __str__(self):
+        return f"{self.source_product.name} -> {self.recommended_product.name} ({self.recommendation_type})"
