@@ -8,13 +8,25 @@ from django.utils import timezone
 from django.core.validators import MinValueValidator, MaxValueValidator
 from decimal import Decimal
 from config.currency import MIN_AMOUNT, MAX_AMOUNT, CURRENCY_DECIMAL_PLACES, CURRENCY
+import json
 
 User = get_user_model()
 
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return str(obj)
+        return super().default(obj)
+
 class MobilePaymentProvider(models.Model):
     """Model for mobile money providers (MTN, Airtel)"""
+    PROVIDER_CHOICES = [
+        ('MTN', 'MTN Mobile Money'),
+        ('AIRTEL', 'Airtel Money'),
+    ]
+    
     name = models.CharField(_('provider name'), max_length=50)
-    code = models.CharField(_('provider code'), max_length=10, unique=True)
+    code = models.CharField(_('provider code'), max_length=10, choices=PROVIDER_CHOICES, unique=True)
     is_active = models.BooleanField(_('active'), default=True)
     api_base_url = models.URLField(_('API base URL'))
     api_key = models.CharField(_('API key'), max_length=255)
@@ -30,113 +42,55 @@ class MobilePaymentProvider(models.Model):
 
 class MobilePayment(models.Model):
     """Model for mobile money payments"""
-    PROVIDER_CHOICES = [
-        ('MTN', 'MTN Mobile Money'),
-        ('AIRTEL', 'Airtel Money'),
-    ]
-
     STATUS_CHOICES = [
-        ('PENDING', 'Pending'),
-        ('PROCESSING', 'Processing'),
-        ('COMPLETED', 'Completed'),
-        ('FAILED', 'Failed'),
-        ('CANCELLED', 'Cancelled'),
+        ('PENDING', _('Pending')),
+        ('PROCESSING', _('Processing')),
+        ('SUCCESSFUL', _('Successful')),
+        ('FAILED', _('Failed')),
+        ('CANCELLED', _('Cancelled')),
     ]
-
+    
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(
-        User,
-        on_delete=models.PROTECT,
-        related_name='mobile_payments'
-    )
-    order = models.ForeignKey(
-        Order,
-        on_delete=models.CASCADE,
-        related_name='mobile_payments'
-    )
-    provider = models.CharField(
-        max_length=10,
-        choices=PROVIDER_CHOICES
-    )
-    phone_number = models.CharField(max_length=15)
+    user = models.ForeignKey(User, on_delete=models.PROTECT, related_name='mobile_payments')
+    order = models.ForeignKey(Order, on_delete=models.PROTECT, related_name='mobile_payments')
+    provider = models.ForeignKey(MobilePaymentProvider, on_delete=models.PROTECT)
     amount = models.DecimalField(
-        max_digits=12,
+        max_digits=10, 
         decimal_places=CURRENCY_DECIMAL_PLACES,
         validators=[
             MinValueValidator(MIN_AMOUNT),
             MaxValueValidator(MAX_AMOUNT)
         ]
     )
-    currency = models.CharField(
-        max_length=3,
-        default=CURRENCY
-    )
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default='pending'
-    )
-    transaction_id = models.CharField(
-        max_length=100,
-        unique=True,
-        null=True,
-        blank=True
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
+    phone_number = models.CharField(_('phone number'), max_length=15)
+    status = models.CharField(_('status'), max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    transaction_id = models.CharField(_('transaction ID'), max_length=100, unique=True, null=True, blank=True)
+    provider_reference = models.CharField(_('provider reference'), max_length=100, null=True, blank=True)
+    provider_response = models.JSONField(_('provider response'), null=True, blank=True)
+    created_at = models.DateTimeField(_('created at'), auto_now_add=True)
+    updated_at = models.DateTimeField(_('updated at'), auto_now=True)
+    
     class Meta:
+        verbose_name = _('mobile payment')
+        verbose_name_plural = _('mobile payments')
         ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['transaction_id']),
-            models.Index(fields=['status']),
-            models.Index(fields=['created_at']),
-        ]
-
+    
     def __str__(self):
-        return f"{self.provider} payment for order {self.order.id}"
-
-    def save(self, *args, **kwargs):
-        if self.status == 'SUCCESSFUL' and not self.completed_at:
-            self.completed_at = timezone.now()
-        super().save(*args, **kwargs)
+        return f"{self.provider.name} - {self.amount} {CURRENCY} - {self.status}"
 
 class PaymentNotification(models.Model):
-    """Model for storing payment notifications/webhooks"""
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    payment = models.ForeignKey(
-        MobilePayment,
-        on_delete=models.PROTECT,
-        related_name='notifications'
-    )
-    provider = models.ForeignKey(
-        MobilePaymentProvider,
-        on_delete=models.PROTECT,
-        related_name='notifications'
-    )
-    
-    # Notification details
+    """Model for storing payment notifications/webhooks from providers"""
+    payment = models.ForeignKey(MobilePayment, on_delete=models.PROTECT, related_name='notifications')
+    provider = models.ForeignKey(MobilePaymentProvider, on_delete=models.PROTECT)
     notification_type = models.CharField(_('notification type'), max_length=50)
-    status = models.CharField(_('status'), max_length=50)
-    raw_payload = models.JSONField(_('raw payload'))
-    
-    # Processing status
-    is_processed = models.BooleanField(_('processed'), default=False)
-    processing_errors = models.TextField(_('processing errors'), blank=True)
-    
-    # Metadata
-    received_at = models.DateTimeField(_('received at'), auto_now_add=True)
-    processed_at = models.DateTimeField(_('processed at'), null=True, blank=True)
+    payload = models.JSONField(_('notification payload'), default=dict, encoder=DecimalEncoder)
+    processed = models.BooleanField(_('processed'), default=False)
+    created_at = models.DateTimeField(_('created at'), default=timezone.now)
     
     class Meta:
         verbose_name = _('payment notification')
         verbose_name_plural = _('payment notifications')
-        ordering = ['-received_at']
+        ordering = ['-created_at']
     
     def __str__(self):
-        return f"{self.notification_type} notification for payment {self.payment.id}"
-
-    def save(self, *args, **kwargs):
-        if self.is_processed and not self.processed_at:
-            self.processed_at = timezone.now()
-        super().save(*args, **kwargs)
+        return f"{self.provider.name} - {self.notification_type} - {self.created_at}"

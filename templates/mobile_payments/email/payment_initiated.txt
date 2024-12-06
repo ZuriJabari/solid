@@ -1,0 +1,25 @@
+Payment Initiated
+
+Dear {{ user.get_full_name }},
+
+Your payment for order #{{ order.id }} has been initiated. Please follow these steps to complete your payment:
+
+Payment Details:
+- Amount: UGX {{ amount }}
+- Payment Method: {{ provider }}
+- Order ID: #{{ order.id }}
+- Date: {{ payment.created_at|date:"F j, Y, g:i a" }}
+
+Instructions:
+1. You will receive a prompt on your phone ({{ payment.phone_number }}) to authorize the payment.
+2. Enter your PIN to complete the payment.
+3. Once completed, you will receive a confirmation message.
+
+If you don't receive the prompt within 5 minutes, you can retry the payment at:
+{{ settings.SITE_URL }}/orders/{{ order.id }}/retry-payment
+
+If you need assistance, please contact our support team.
+
+This is an automated message, please do not reply to this email.
+
+© {% now "Y" %} Urban Herb. All rights reserved. 

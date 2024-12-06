@@ -1,0 +1,30 @@
+Payment {{ status }}
+
+Dear {{ user.get_full_name }},
+
+Your payment for order #{{ order.id }} is now {{ status }}.
+
+Payment Details:
+- Amount: UGX {{ amount }}
+- Payment Method: {{ provider }}
+- Order ID: #{{ order.id }}
+- Transaction ID: {{ payment.transaction_id }}
+- Date: {{ payment.updated_at|date:"F j, Y, g:i a" }}
+
+{% if payment.status == 'SUCCESSFUL' %}
+Thank you for your payment. Your order will be processed shortly.
+
+View your order details at:
+{{ settings.SITE_URL }}/orders/{{ order.id }}
+{% elif payment.status == 'FAILED' %}
+Unfortunately, your payment was not successful. You can try again at:
+{{ settings.SITE_URL }}/orders/{{ order.id }}/retry-payment
+
+If you continue to experience issues, please contact our support team.
+{% else %}
+Your payment is being processed. We will notify you once it's complete.
+{% endif %}
+
+This is an automated message, please do not reply to this email.
+
+© {% now "Y" %} Urban Herb. All rights reserved. 

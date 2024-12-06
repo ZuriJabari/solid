@@ -1,0 +1,24 @@
+Payment Reminder
+
+Dear {{ user.get_full_name }},
+
+This is a reminder that your payment for order #{{ order.id }} is still pending.
+
+IMPORTANT: Your order may be cancelled if payment is not completed soon.
+
+Payment Details:
+- Amount: UGX {{ amount }}
+- Payment Method: {{ provider }}
+- Order ID: #{{ order.id }}
+- Payment Initiated: {{ payment.created_at|date:"F j, Y, g:i a" }}
+
+To complete your payment:
+1. Visit the payment page at: {{ settings.SITE_URL }}/orders/{{ order.id }}/retry-payment
+2. You will receive a prompt on your phone ({{ payment.phone_number }})
+3. Enter your PIN to authorize the payment
+
+If you need assistance or believe you have received this message in error, please contact our support team.
+
+This is an automated message, please do not reply to this email.
+
+© {% now "Y" %} Urban Herb. All rights reserved. 

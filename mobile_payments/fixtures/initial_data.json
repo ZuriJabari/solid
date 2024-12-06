@@ -1,28 +1,58 @@
 [
     {
         "model": "mobile_payments.mobilepaymentprovider",
-        "pk": "1",
+        "pk": 1,
         "fields": {
             "name": "MTN Mobile Money",
             "code": "MTN",
             "is_active": true,
             "api_base_url": "https://sandbox.momodeveloper.mtn.com",
-            "api_key": "test_api_key_mtn",
-            "api_secret": "test_api_secret_mtn",
-            "webhook_secret": "test_webhook_secret_mtn"
+            "api_key": "your_mtn_api_key",
+            "api_secret": "your_mtn_api_secret",
+            "webhook_secret": "your_mtn_webhook_secret"
         }
     },
     {
         "model": "mobile_payments.mobilepaymentprovider",
-        "pk": "2",
+        "pk": 2,
         "fields": {
             "name": "Airtel Money",
             "code": "AIRTEL",
             "is_active": true,
             "api_base_url": "https://openapiuat.airtel.africa",
-            "api_key": "test_api_key_airtel",
-            "api_secret": "test_api_secret_airtel",
-            "webhook_secret": "test_webhook_secret_airtel"
+            "api_key": "your_airtel_api_key",
+            "api_secret": "your_airtel_api_secret",
+            "webhook_secret": "your_airtel_webhook_secret"
+        }
+    },
+    {
+        "model": "checkout.paymentmethod",
+        "pk": 1,
+        "fields": {
+            "name": "MTN Mobile Money",
+            "provider": "MTN_MOMO",
+            "description": "Pay using MTN Mobile Money",
+            "is_active": true,
+            "requires_verification": true,
+            "min_amount": "100",
+            "max_amount": "5000000",
+            "created_at": "2024-01-20T12:00:00Z",
+            "updated_at": "2024-01-20T12:00:00Z"
+        }
+    },
+    {
+        "model": "checkout.paymentmethod",
+        "pk": 2,
+        "fields": {
+            "name": "Airtel Money",
+            "provider": "AIRTEL_MONEY",
+            "description": "Pay using Airtel Money",
+            "is_active": true,
+            "requires_verification": true,
+            "min_amount": "100",
+            "max_amount": "5000000",
+            "created_at": "2024-01-20T12:00:00Z",
+            "updated_at": "2024-01-20T12:00:00Z"
         }
     }
 ] 

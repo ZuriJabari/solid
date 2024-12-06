@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            padding: 20px 0;
+            border-bottom: 2px solid #eee;
+        }
+        .content {
+            padding: 20px 0;
+        }
+        .footer {
+            text-align: center;
+            padding: 20px 0;
+            border-top: 2px solid #eee;
+            font-size: 12px;
+            color: #666;
+        }
+        .amount {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c5282;
+        }
+        .status {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 15px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .status-successful {
+            background-color: #c6f6d5;
+            color: #276749;
+        }
+        .status-failed {
+            background-color: #fed7d7;
+            color: #9b2c2c;
+        }
+        .status-pending {
+            background-color: #fefcbf;
+            color: #975a16;
+        }
+        .details {
+            background-color: #f7fafc;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #4299e1;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Payment {{ status }}</h1>
+        </div>
+        
+        <div class="content">
+            <p>Dear {{ user.get_full_name }},</p>
+            
+            <p>Your payment for order #{{ order.id }} is now <span class="status status-{{ payment.status|lower }}">{{ status }}</span></p>
+            
+            <div class="details">
+                <p><strong>Amount:</strong> <span class="amount">UGX {{ amount }}</span></p>
+                <p><strong>Payment Method:</strong> {{ provider }}</p>
+                <p><strong>Order ID:</strong> #{{ order.id }}</p>
+                <p><strong>Transaction ID:</strong> {{ payment.transaction_id }}</p>
+                <p><strong>Date:</strong> {{ payment.updated_at|date:"F j, Y, g:i a" }}</p>
+            </div>
+            
+            {% if payment.status == 'SUCCESSFUL' %}
+                <p>Thank you for your payment. Your order will be processed shortly.</p>
+                <a href="{{ settings.SITE_URL }}/orders/{{ order.id }}" class="button">View Order Details</a>
+            {% elif payment.status == 'FAILED' %}
+                <p>Unfortunately, your payment was not successful. You can try again by clicking the button below:</p>
+                <a href="{{ settings.SITE_URL }}/orders/{{ order.id }}/retry-payment" class="button">Retry Payment</a>
+                <p>If you continue to experience issues, please contact our support team.</p>
+            {% else %}
+                <p>Your payment is being processed. We will notify you once it's complete.</p>
+            {% endif %}
+        </div>
+        
+        <div class="footer">
+            <p>This is an automated message, please do not reply to this email.</p>
+            <p>&copy; {% now "Y" %} Urban Herb. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html> 

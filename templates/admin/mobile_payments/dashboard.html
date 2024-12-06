@@ -1,0 +1,263 @@
+{% extends "admin/base_site.html" %}
+{% load static i18n %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.css">
+<style>
+    .dashboard-container {
+        padding: 20px;
+    }
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    .stat-card {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .stat-card h3 {
+        margin: 0 0 10px;
+        color: #666;
+        font-size: 14px;
+    }
+    .stat-value {
+        font-size: 24px;
+        font-weight: bold;
+        color: #2c5282;
+    }
+    .stat-trend {
+        font-size: 12px;
+        margin-top: 5px;
+    }
+    .trend-up { color: #48bb78; }
+    .trend-down { color: #f56565; }
+    .chart-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    .chart-card {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .chart-card h3 {
+        margin: 0 0 20px;
+        color: #333;
+    }
+    .table-card {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 30px;
+    }
+    .status-badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    .status-pending { background: #fefcbf; color: #975a16; }
+    .status-processing { background: #e9f5ff; color: #2b6cb0; }
+    .status-successful { background: #c6f6d5; color: #276749; }
+    .status-failed { background: #fed7d7; color: #9b2c2c; }
+    .status-cancelled { background: #e2e8f0; color: #4a5568; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <h1>Payment Processing Dashboard</h1>
+    
+    <!-- Quick Stats -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>Total Transactions Today</h3>
+            <div class="stat-value">{{ stats.total_today }}</div>
+            <div class="stat-trend {% if stats.total_trend > 0 %}trend-up{% else %}trend-down{% endif %}">
+                {{ stats.total_trend }}% from yesterday
+            </div>
+        </div>
+        <div class="stat-card">
+            <h3>Total Amount (Today)</h3>
+            <div class="stat-value">UGX {{ stats.amount_today|floatformat:0 }}</div>
+            <div class="stat-trend {% if stats.amount_trend > 0 %}trend-up{% else %}trend-down{% endif %}">
+                {{ stats.amount_trend }}% from yesterday
+            </div>
+        </div>
+        <div class="stat-card">
+            <h3>Success Rate (Today)</h3>
+            <div class="stat-value">{{ stats.success_rate }}%</div>
+            <div class="stat-trend {% if stats.success_trend > 0 %}trend-up{% else %}trend-down{% endif %}">
+                {{ stats.success_trend }}% from yesterday
+            </div>
+        </div>
+        <div class="stat-card">
+            <h3>Average Processing Time</h3>
+            <div class="stat-value">{{ stats.avg_processing_time }} min</div>
+        </div>
+    </div>
+    
+    <!-- Charts -->
+    <div class="chart-grid">
+        <div class="chart-card">
+            <h3>Payment Volume (Last 7 Days)</h3>
+            <canvas id="volumeChart"></canvas>
+        </div>
+        <div class="chart-card">
+            <h3>Payment Status Distribution</h3>
+            <canvas id="statusChart"></canvas>
+        </div>
+        <div class="chart-card">
+            <h3>Provider Distribution</h3>
+            <canvas id="providerChart"></canvas>
+        </div>
+        <div class="chart-card">
+            <h3>Hourly Transaction Volume</h3>
+            <canvas id="hourlyChart"></canvas>
+        </div>
+    </div>
+    
+    <!-- Recent Transactions -->
+    <div class="table-card">
+        <h3>Recent Transactions</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>User</th>
+                    <th>Amount</th>
+                    <th>Provider</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Updated</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for payment in recent_payments %}
+                <tr>
+                    <td>{{ payment.id }}</td>
+                    <td>{{ payment.user.email }}</td>
+                    <td>UGX {{ payment.amount|floatformat:0 }}</td>
+                    <td>{{ payment.provider.name }}</td>
+                    <td>
+                        <span class="status-badge status-{{ payment.status|lower }}">
+                            {{ payment.get_status_display }}
+                        </span>
+                    </td>
+                    <td>{{ payment.created_at|date:"Y-m-d H:i:s" }}</td>
+                    <td>{{ payment.updated_at|date:"Y-m-d H:i:s" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extrajs %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+<script>
+    // Common chart options
+    const commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom'
+            }
+        }
+    };
+    
+    // Volume Chart
+    const volumeCtx = document.getElementById('volumeChart').getContext('2d');
+    new Chart(volumeCtx, {
+        type: 'line',
+        data: {
+            labels: {{ volume_data.labels|safe }},
+            datasets: [{
+                label: 'Number of Transactions',
+                data: {{ volume_data.values|safe }},
+                borderColor: '#4299e1',
+                tension: 0.1
+            }]
+        },
+        options: {
+            ...commonOptions,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+    
+    // Status Chart
+    const statusCtx = document.getElementById('statusChart').getContext('2d');
+    new Chart(statusCtx, {
+        type: 'doughnut',
+        data: {
+            labels: {{ status_data.labels|safe }},
+            datasets: [{
+                data: {{ status_data.values|safe }},
+                backgroundColor: [
+                    '#fefcbf',  // Pending
+                    '#e9f5ff',  // Processing
+                    '#c6f6d5',  // Successful
+                    '#fed7d7',  // Failed
+                    '#e2e8f0'   // Cancelled
+                ]
+            }]
+        },
+        options: commonOptions
+    });
+    
+    // Provider Chart
+    const providerCtx = document.getElementById('providerChart').getContext('2d');
+    new Chart(providerCtx, {
+        type: 'pie',
+        data: {
+            labels: {{ provider_data.labels|safe }},
+            datasets: [{
+                data: {{ provider_data.values|safe }},
+                backgroundColor: [
+                    '#4299e1',
+                    '#48bb78'
+                ]
+            }]
+        },
+        options: commonOptions
+    });
+    
+    // Hourly Chart
+    const hourlyCtx = document.getElementById('hourlyChart').getContext('2d');
+    new Chart(hourlyCtx, {
+        type: 'bar',
+        data: {
+            labels: {{ hourly_data.labels|safe }},
+            datasets: [{
+                label: 'Transactions',
+                data: {{ hourly_data.values|safe }},
+                backgroundColor: '#4299e1'
+            }]
+        },
+        options: {
+            ...commonOptions,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+</script>
+{% endblock %} 
