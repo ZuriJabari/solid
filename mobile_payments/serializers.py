@@ -21,7 +21,7 @@ class MobilePaymentSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'user', 'created_at', 'updated_at']
 
 class PaymentInitiateSerializer(serializers.Serializer):
-    order_id = serializers.IntegerField()
+    order_id = serializers.UUIDField()
     provider = serializers.PrimaryKeyRelatedField(queryset=MobilePaymentProvider.objects.filter(is_active=True))
     phone_number = serializers.CharField(max_length=15)
 

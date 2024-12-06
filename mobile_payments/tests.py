@@ -187,15 +187,28 @@ class MobilePaymentAPITests(APITestCase):
         )
         self.client.force_authenticate(user=self.user)
 
-    def test_initiate_payment_api(self):
+    @patch('mobile_payments.services.MobilePaymentService._call_provider_api')
+    def test_initiate_payment_api(self, mock_call_api):
+        mock_call_api.return_value = {
+            'status': 'PENDING',
+            'provider_reference': 'TEST123'
+        }
+        
+        request_data = {
+            'order_id': self.order.id,
+            'provider': self.provider.id,
+            'phone_number': '256777123456'
+        }
+        print(f"Request data: {request_data}")  # Debug print
+        
         response = self.client.post(
             reverse('mobile_payments:initiate'),
-            {
-                'order_id': str(self.order.id),
-                'phone_number': '256777123456'
-            }
+            request_data,
+            format='json'  # Explicitly set format to JSON
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)  # API returns error due to mock
+        print(f"Response content: {response.content}")  # Debug print
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status'], 'PROCESSING')
 
     def test_check_payment_status_api(self):
         payment = MobilePayment.objects.create(
@@ -207,7 +220,7 @@ class MobilePaymentAPITests(APITestCase):
             transaction_id='TEST123'
         )
         
-        url = reverse('mobile_payments:payment-check-status')
+        url = reverse('mobile_payments:check-status')
         data = {'transaction_id': payment.transaction_id}
         
         with patch('mobile_payments.services.MobilePaymentService._call_provider_status_api') as mock_api:

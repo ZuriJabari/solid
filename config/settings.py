@@ -321,3 +321,25 @@ USE_THOUSAND_SEPARATOR = True
 THOUSAND_SEPARATOR = CURRENCY_THOUSAND_SEPARATOR
 NUMBER_GROUPING = 3
 DECIMAL_SEPARATOR = '.'
+
+# Email settings
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'Urban Herb <noreply@urbanherb.com>')
+
+# Africa's Talking API settings
+AT_API_KEY = os.getenv('AT_API_KEY')
+AT_USERNAME = os.getenv('AT_USERNAME')
+AT_SENDER_ID = os.getenv('AT_SENDER_ID', 'URBANHERB')
+
+# Mobile Money API settings
+MTN_API_KEY = os.getenv('MTN_API_KEY')
+MTN_API_SECRET = os.getenv('MTN_API_SECRET')
+MTN_WEBHOOK_SECRET = os.getenv('MTN_WEBHOOK_SECRET')
+
+AIRTEL_API_KEY = os.getenv('AIRTEL_API_KEY')
+AIRTEL_API_SECRET = os.getenv('AIRTEL_API_SECRET')
+AIRTEL_WEBHOOK_SECRET = os.getenv('AIRTEL_WEBHOOK_SECRET')

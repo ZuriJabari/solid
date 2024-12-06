@@ -1,8 +1,9 @@
 from django.db import models
 from django.conf import settings
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator
 from decimal import Decimal
 from config.currency import MIN_AMOUNT, MAX_AMOUNT, CURRENCY_DECIMAL_PLACES
+from django.utils.translation import gettext_lazy as _
 
 class Order(models.Model):
     """Model for orders"""
@@ -93,30 +94,47 @@ class PickupLocation(models.Model):
         return self.name
 
 class PaymentMethod(models.Model):
-    """Model for payment methods"""
-    name = models.CharField(max_length=100)
-    description = models.TextField(blank=True)
-    provider = models.CharField(max_length=50)
-    icon = models.ImageField(upload_to='payment_icons/', null=True, blank=True)
-    is_active = models.BooleanField(default=True)
-    requires_verification = models.BooleanField(default=False)
+    """Payment methods available in the system"""
+    PROVIDER_CHOICES = [
+        ('MTN_MOMO', _('MTN Mobile Money')),
+        ('AIRTEL_MONEY', _('Airtel Money')),
+    ]
+    
+    name = models.CharField(_('name'), max_length=100)
+    provider = models.CharField(_('provider'), max_length=20, choices=PROVIDER_CHOICES)
+    description = models.TextField(_('description'), blank=True)
+    icon = models.ImageField(_('icon'), upload_to='payment_methods/', null=True, blank=True)
+    is_active = models.BooleanField(_('active'), default=True)
+    requires_verification = models.BooleanField(_('requires verification'), default=True)
     min_amount = models.DecimalField(
-        max_digits=12,
+        _('minimum amount'),
+        max_digits=10,
         decimal_places=CURRENCY_DECIMAL_PLACES,
-        validators=[MinValueValidator(Decimal('0'))],
+        validators=[MinValueValidator(MIN_AMOUNT)],
         default=MIN_AMOUNT
     )
     max_amount = models.DecimalField(
-        max_digits=12,
+        _('maximum amount'),
+        max_digits=10,
         decimal_places=CURRENCY_DECIMAL_PLACES,
-        validators=[MinValueValidator(Decimal('0'))],
-        default=MAX_AMOUNT
+        validators=[MaxValueValidator(MAX_AMOUNT)],
+        null=True,
+        blank=True
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(_('created at'), auto_now_add=True)
+    updated_at = models.DateTimeField(_('updated at'), auto_now=True)
+
+    class Meta:
+        verbose_name = _('payment method')
+        verbose_name_plural = _('payment methods')
+        ordering = ['name']
 
     def __str__(self):
         return self.name
+
+    @property
+    def provider_display(self):
+        return dict(self.PROVIDER_CHOICES).get(self.provider, self.provider)
 
 class CheckoutSession(models.Model):
     """Model for managing checkout sessions"""
