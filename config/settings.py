@@ -20,7 +20,7 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-9l3=^t!%#^v6l3@&6q=
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DJANGO_DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '172.20.10.2', '*'] if DEBUG else os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 # Application definition
 INSTALLED_APPS = [
@@ -247,7 +247,8 @@ CSRF_TRUSTED_ORIGINS = [
     'http://localhost:8001', 
     'http://127.0.0.1:8001',
     'http://localhost:8002', 
-    'http://127.0.0.1:8002'
+    'http://127.0.0.1:8002',
+    'http://172.20.10.2:8000',
 ]
 
 # Security Middleware settings
